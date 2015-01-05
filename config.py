@@ -24,4 +24,5 @@ poses_dir = prefix + 'poses/'
 
 sequence_num = '00'
 
+#pokus o zmenu
 
