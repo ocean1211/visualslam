@@ -16,7 +16,7 @@ def calibrate(camera, filename, patern_size, square_size, min_num_of_images = 10
     :type patern_size: array(1,2)
     
     """
-    capture = cv2.VideCapture(0)
+    capture = cv2.VideCapture(camera)
     if not capture.isOpened():
         return -1
     
@@ -71,5 +71,5 @@ def calibrate(camera, filename, patern_size, square_size, min_num_of_images = 10
 
 
 if __name__ == "__main__":
-    calibrate()
+    calibrate(0, "params.json", (9,6), 24)
 
