@@ -9,7 +9,7 @@ import numpy as np
 import cv2
 import json
 
-def calibrate(camera, filename, patern_size, square_size, min_num_of_images = 10):
+def calibrate(camera, filename, pattern_size, square_size, min_num_of_images = 10):
     """
     
     :param patern_size: velikost sachovnice
