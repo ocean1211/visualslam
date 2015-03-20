@@ -15,8 +15,10 @@ class Camera:
 
     def __init__(self, camera):
         self.camPointer = cv2.VideoCapture(camera)
+        self.opened = True
         if(not self.camPointer.isOpened()):
             print "NEPODARILO SE NACIST KAMERU"
+            self.opened = False            
         pass
     
     def frame(self, gray = False):
@@ -25,7 +27,7 @@ class Camera:
             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
         return frame
 
-    def calibrate(camera, filename, pattern_size, square_size, min_num_of_images = 10, sleep_time = 500):
+    def calibrate(filename, pattern_size, square_size, min_num_of_images = 10, sleep_time = 500):
         """
             Kalibrace kamery pomocí šachovnice
 
@@ -41,9 +43,6 @@ class Camera:
         :type min_num_of_images: int (default 10)
 
         """
-        capture = cv2.VideoCapture(camera)
-        if not capture.isOpened():
-            return -1
 
         pattern_points = np.zeros( (np.prod(pattern_size), 3), np.float32 )
         pattern_points[:,:2] = np.indices(pattern_size).T.reshape(-1, 2)

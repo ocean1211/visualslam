@@ -14,6 +14,8 @@ import numpy as np
 import scipy
 import cv2
 
+
+
 def fast(img, parameters): # TODO > Zjistit jak nastavit neighborhood
 	fastDetector = cv2.FastFeatureDetector()
 	fastDetector.setInt('threshold', parameters['threshold'])
