@@ -1,0 +1,12 @@
+# cJSON 
+# KONFIGURAČNÍ SOUBOR PRO VISUAL SLAM PROJEKT 
+# AUTOR : PETR NEDUCHAL
+
+{
+    # Zdroj dat : camera | directory, číslo kamery | složka s daty
+    "source" : [
+        "camera",
+        0
+    ]
+    
+}
