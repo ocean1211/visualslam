@@ -22,7 +22,7 @@ class Camera:
         pass
     
     def frame(self, gray = False):
-        frame = self.camPointer.read()
+        ret, frame = self.camPointer.read()
         if gray:
             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
         return frame
