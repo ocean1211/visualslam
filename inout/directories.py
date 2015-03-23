@@ -20,19 +20,18 @@ import cv2
 ## directory class
 class directory:
 
-
-        position = 0
-        count = 0
-
         # construktor
         def __init__(self, dirname): #
-          self.filelist = []
-          for root, directories, files in os.walk(dirname):
-            for filename in files:
-              filepath = os.path.join(root, filename)
-              self.filelist.append(filepath)
-          self.filelist.sort()
-          self.count = len(self.filelist)
+            self.position = 0
+            self.count = 0
+
+            self.filelist = []
+            for root, directories, files in os.walk(dirname):
+              for filename in files:
+                filepath = os.path.join(root, filename)
+                self.filelist.append(filepath)
+            self.filelist.sort()
+            self.count = len(self.filelist)
 
         def getNext(self):
                 self.position = self.position + 1

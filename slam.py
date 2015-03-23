@@ -44,6 +44,7 @@ def main():
         frame = source.frame(gray = True)        
         
         # Feature detection
+        
         features = detectors.detect(config["detector"]["type"], frame, config["detector"]["parameters"])
         
             
