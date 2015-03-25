@@ -15,6 +15,7 @@ import argparse
 # -----------------------------------------------------------------------------
 from inout import *
 from fd import *
+from vis import *
 
 configFile = "config/config1.json"
 
@@ -31,10 +32,13 @@ def main():
     
     # Nacteni prvniho snimku
     frame = source.frame(gray = True)
-    
+   
+    surf = cv2.SURF() 
     # Zpracovani prvniho snimku :
-    
-    
+    oldframe = frame 
+    oldkp, oldfeatures = surf.detectAndCompute(frame, None)
+
+
 
     # MAIN LOOP
     while not frame == None:
@@ -45,11 +49,22 @@ def main():
         
         # Feature detection
         
-        features = detectors.detect(config["detector"]["type"], frame, config["detector"]["parameters"])
+        kp, features = surf.detectAndCompute(frame, None)
         
             
         #print np.min(features[:,0]), np.max(features[:,1])
+        
+        # create BFMatcher object
+        bf = cv2.BFMatcher(cv2.NORM_L2, crossCheck=True)
+
+        # Match descriptors.
+        matchesP = bf.match(features,oldfeatures)        
           
+        # Sort them in the order of their distance.
+        matchesP = sorted(matchesP, key = lambda x:x.distance)
+
+        # Draw first 10 matches.
+        matches.drawMatches(frame, kp, oldframe, oldkp, matchesP[:20])
         
         # Zobrazeni aktualniho snimku        
         cv2.imshow("Data", frame)
@@ -58,6 +73,9 @@ def main():
         if cv2.waitKey(30) & 0xFF == ord('q'):
             break
             
+        oldframe = frame             
+        oldfeatures = features 
+        oldkp = kp
         pass
   
     cv2.destroyAllWindows() 
