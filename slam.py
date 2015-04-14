@@ -16,6 +16,7 @@ import argparse
 from inout import *
 from fd import *
 from vis import *
+from epipolar import *
 
 configFile = "config/config1.json"
 
@@ -36,8 +37,7 @@ def main():
     surf = cv2.SURF() 
     # Zpracovani prvniho snimku :
     oldframe = frame 
-    oldkp, oldfeatures = surf.detectAndCompute(frame, None)
-
+    oldkp, oldfeatures = detectors.detect("surf", frame)
 
 
     # MAIN LOOP
@@ -49,8 +49,8 @@ def main():
         
         # Feature detection
         
-        kp, features = surf.detectAndCompute(frame, None)
-        
+        #kp, features = surf.detectAndCompute(frame, None)
+        kp, features = detectors.detect("surf", frame)
             
         #print np.min(features[:,0]), np.max(features[:,1])
         
@@ -63,8 +63,26 @@ def main():
         # Sort them in the order of their distance.
         matchesP = sorted(matchesP, key = lambda x:x.distance)
 
+        points1 = np.zeros([len(matchesP), 2])
+        points2 = np.zeros([len(matchesP), 2])
+        i = 0
+        for mat in matchesP:
+            img1_idx = mat.queryIdx
+            img2_idx = mat.trainIdx
+            (x1,y1) = kp[img1_idx].pt
+            (x2,y2) = oldkp[img2_idx].pt
+            points1[i,:] = np.array([x1, y1])
+            points2[i,:] = np.array([x2, y2])
+            i = i + 1
+        
+        #retval, mask = cv2.findFundamentalMat(points1, points2)
+        retval, mask = cv2.findHomography(points1, points2, cv2.cv.CV_RANSAC)
+        
+        
+        
         # Draw first 10 matches.
-        matches.drawMatches(frame, kp, oldframe, oldkp, matchesP[:20])
+        #matches.drawMatches(frame, kp, oldframe, oldkp, matchesP[:10])
+        
         
         # Zobrazeni aktualniho snimku        
         cv2.imshow("Data", frame)
