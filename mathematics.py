@@ -15,7 +15,7 @@ import numpy as np
 import scipy
 
 def QuaternionFromAngularVelocity(av):
-	angle = np.sqrt(av[0]*av[0] + av[1]*av[1] + av[2]*av[2])
+	angle = np.sqrt(np.sum(av**2))
 
 	if (angle > 0.0):
 		s = np.sin(angle/2.0) / angle
@@ -37,8 +37,7 @@ def dq3_by_dq1(q):
 	return m
 
 def dq3_by_dq2(q):
-	m = np.identity(4, dtype = np.double) 
-	m[0,0] = m[1,1] = m[2,2] = m[3,3] = q[0]
+	m = np.identity(4, dtype = np.double) * q[0]
 	m[1,0] = m[2,3] = q[1]
 	m[0,1] = m[3,2] = -q[1]
 	m[2,0] = m[3,1] = q[2]
@@ -51,17 +50,17 @@ def dq0_by_domegaA(omegaA, omega, delta_t):
 	return ((-delta_t / 2.0) * (omegaA/omega) * np.sin(omega * delta_t / 2.0))
 
 def dqA_by_domegaA(omegaA, omega, delta_t):
-	return ((delta_t / 2.0) * omegaA * omegaA / (omega * omega) * \
-					np.cos(omega * delta_t / 2.0) + (1.0 / omega) * (1.0 - omegaA * omegaA / (omega * omega)) * \
+	return ((delta_t / 2.0) * (omegaA**2) / (omega**2) * \
+					np.cos(omega * delta_t / 2.0) + (1.0 / omega) * (1.0 - (omegaA**2) / (omega**2)) * \
 					np.sin(omega * delta_t / 2.0))
 
 def dqA_by_domegaB(omegaA, omegaB, omega, delta_t):
-	return ((omegaA * omegaB / (omega * omega)) * ((delta_t / 2.0) * \
+	return ((omegaA * omegaB / (omega**2)) * ((delta_t / 2.0) * \
 				 np.cos(omega * delta_t / 2.0) - \
 			   (1.0 / omega) * np.sin(omega * delta_t / 2.0) ))
 
 def dq_omega_dt(omega, delta_t):
-	omegamod = np.sqrt(omega[0] * omega[0] + omega[1] * omega[1] + omega[2] * omega[2])
+	omegamod = np.sqrt(np.sum(omega**2))
 	dqomegadt_by_domega = np.zeros([4,3], dtype = np.double)
 
   # Use generic ancillary functions to calculate components of Jacobian
@@ -80,15 +79,14 @@ def dq_omega_dt(omega, delta_t):
 	return dqomegadt_by_domega
 
 def dqi_by_dqi(qi, qq):
-	return (1 - (qi*qi / qq*qq))/ qq
+	return (1 - (qi**2 / float(qq**2)))/ qq
 
 def dqi_by_dqj(qi, qj, qq):
-	return -qi * qj / (qq*qq*qq)
+	return -qi * qj / float(qq**3)
 
 def dqnorm_by_dq(q):
-	M = np.zeros([4,4], dtype = np.double)
-	quat = mq.quaternion()
-	qq = quat.norm(q)
+	M = np.zeros([4,4], dtype = np.double)	
+	qq = np.sum(q**2)
 
 	M[0,0] = dqi_by_dqi(q[0], qq) 
 	M[0,1] = dqi_by_dqj(q[0], q[1], qq)
@@ -107,8 +105,16 @@ def dqnorm_by_dq(q):
 	M[3,2] = dqi_by_dqj(q[3], q[2], qq)  
 	M[3,3] = dqi_by_dqi(q[3], qq)
 	return  M
-
-
+    
+def qprod(self, q,r):
+		t = np.zeros([4,1], dtype = np.double)
+		t[0] = (r[0]*q[0] - r[1]*q[1] - r[2]*q[2] - r[3]*q[3])
+		t[1] = (r[0]*q[1] + r[1]*q[0] - r[2]*q[3] + r[3]*q[2])
+		t[2] = (r[0]*q[2] + r[1]*q[3] + r[2]*q[0] - r[3]*q[1])
+		t[3] = (r[0]*q[3] - r[1]*q[2] + r[2]*q[1] + r[3]*q[0])
+		return t    
+    
+    
 
 class quaternion:
 

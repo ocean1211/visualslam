@@ -4,15 +4,15 @@
 
 {
     # Zdroj dat : camera | directory, číslo kamery | složka s daty
-    "source" : [
-        "camera",
-        0
-    ],
-
     #"source" : [
-    #    "dir",
-    #    "/home/neduchal/Dokumenty/datasety/08/image_0/"        
+    #    "camera",
+    #    0
     #],
+
+    "source" : [
+        "dir",
+        "/home/neduchal/Dokumenty/datasety/08/image_0/"        
+    ],
 
 
     "detector" : {
