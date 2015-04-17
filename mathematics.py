@@ -85,36 +85,60 @@ def dqi_by_dqj(qi, qj, qq):
 	return -qi * qj / float(qq**3)
 
 def dqnorm_by_dq(q):
-	M = np.zeros([4,4], dtype = np.double)	
-	qq = np.sum(q**2)
+    M = np.zeros([4,4], dtype = np.double)	
+    qq = np.sum(q**2)
 
-	M[0,0] = dqi_by_dqi(q[0], qq) 
-	M[0,1] = dqi_by_dqj(q[0], q[1], qq)
-	M[0,2] = dqi_by_dqj(q[0], q[2], qq) 
-	M[0,3] = dqi_by_dqj(q[0], q[3], qq) 
-	M[1,0] = dqi_by_dqj(q[1], q[0], qq)  
-	M[1,1] = dqi_by_dqi(q[1], qq) 
-	M[1,2] = dqi_by_dqj(q[1], q[2], qq) 
-	M[1,3] = dqi_by_dqj(q[1], q[3], qq) 
-	M[2,0] = dqi_by_dqj(q[2], q[0], qq) 
-	M[2,1] = dqi_by_dqj(q[2], q[1], qq) 
-	M[2,2] = dqi_by_dqi(q[2], qq) 
-	M[2,3] = dqi_by_dqj(q[2], q[3], qq)  
-	M[3,0] = dqi_by_dqj(q[3], q[0], qq) 
-	M[3,1] = dqi_by_dqj(q[3], q[1], qq)  
-	M[3,2] = dqi_by_dqj(q[3], q[2], qq)  
-	M[3,3] = dqi_by_dqi(q[3], qq)
-	return  M
+    M[0,0] = dqi_by_dqi(q[0], qq) 
+    M[0,1] = dqi_by_dqj(q[0], q[1], qq)
+    M[0,2] = dqi_by_dqj(q[0], q[2], qq) 
+    M[0,3] = dqi_by_dqj(q[0], q[3], qq) 
+    M[1,0] = dqi_by_dqj(q[1], q[0], qq)  
+    M[1,1] = dqi_by_dqi(q[1], qq) 
+    M[1,2] = dqi_by_dqj(q[1], q[2], qq) 
+    M[1,3] = dqi_by_dqj(q[1], q[3], qq) 
+    M[2,0] = dqi_by_dqj(q[2], q[0], qq) 
+    M[2,1] = dqi_by_dqj(q[2], q[1], qq) 
+    M[2,2] = dqi_by_dqi(q[2], qq) 
+    M[2,3] = dqi_by_dqj(q[2], q[3], qq)  
+    M[3,0] = dqi_by_dqj(q[3], q[0], qq) 
+    M[3,1] = dqi_by_dqj(q[3], q[1], qq)  
+    M[3,2] = dqi_by_dqj(q[3], q[2], qq)  
+    M[3,3] = dqi_by_dqi(q[3], qq)
+    return  M
     
 def qprod(self, q,r):
-		t = np.zeros([4,1], dtype = np.double)
-		t[0] = (r[0]*q[0] - r[1]*q[1] - r[2]*q[2] - r[3]*q[3])
-		t[1] = (r[0]*q[1] + r[1]*q[0] - r[2]*q[3] + r[3]*q[2])
-		t[2] = (r[0]*q[2] + r[1]*q[3] + r[2]*q[0] - r[3]*q[1])
-		t[3] = (r[0]*q[3] - r[1]*q[2] + r[2]*q[1] + r[3]*q[0])
-		return t    
+    t = np.zeros([4,1], dtype = np.double)
+    t[0] = (r[0]*q[0] - r[1]*q[1] - r[2]*q[2] - r[3]*q[3])
+    t[1] = (r[0]*q[1] + r[1]*q[0] - r[2]*q[3] + r[3]*q[2])
+    t[2] = (r[0]*q[2] + r[1]*q[3] + r[2]*q[0] - r[3]*q[1])
+    t[3] = (r[0]*q[3] - r[1]*q[2] + r[2]*q[1] + r[3]*q[0])
+
+    return t    
+            
+def q2r(q): # matrix representation of quaternion
+    R = np.zeros([3,3], dtype = np.double)
+    R[0,0] = q[0]*q[0] + q[1]*q[1] - q[2]*q[2] - q[3]*q[3]
+    R[1,1] = q[0]*q[0] - q[1]*q[1] + q[2]*q[2] - q[3]*q[3]
+    R[2,2] = q[0]*q[0] - q[1]*q[1] - q[2]*q[2] + q[3]*q[3]
+    R[1,0] = 2*(q[1]*q[2] + q[0]*q[3])
+    R[0,1] = 2*(q[1]*q[2] - q[0]*q[3])
+    R[2,0] = 2*(q[1]*q[3] - q[0]*q[2])
+    R[0,2] = 2*(q[1]*q[3] + q[0]*q[2])
+    R[2,1] = 2*(q[2]*q[3] + q[0]*q[1])
+    R[1,2] = 2*(q[2]*q[3] - q[0]*q[1])
+    return R        
+
+def distort_fm( uv_u, inparams):
     
+    pass
     
+def m(phi, theta):
+	res = np.zeros(3, dtype = np.double)
+	res[0:3] = [np.cos(phi)*np.sin(theta),   -np.sin(phi),  np.cos(phi)*np.cos(theta)]
+	return res    
+    
+def id2cartesian(yi):
+    pass
 
 class quaternion:
 

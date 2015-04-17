@@ -14,8 +14,8 @@ from numpy import *
 import numpy as np
 import scipy
 
-def m(phi, theta)
-	res = np.zeros([3,1], dtype = np.double)
+def m(phi, theta):
+	res = np.zeros(3, dtype = np.double)
 	res[0:3] = [np.cos(phi)*np.sin(theta),   -np.sin(phi),  np.cos(phi)*np.cos(theta)]
 	return res
 
