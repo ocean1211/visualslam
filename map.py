@@ -8,6 +8,7 @@ MAP MANAGMENT
 """
 
 # imports
+import detectors
 import math
 import mathematics
 import numpy as np
@@ -77,7 +78,51 @@ class map:
         pass
     
     def inverseDepth2XYZ(self, x, P):
-        pass
+        lin_index_thresh = 0.1
+        convert = 0
+        
+        for i in range(len(self.features)):
+            if (convert == 1):
+                self.features[i]['begin'] -= 3
+                continue
+                
+            if self.features[i]['type'] == 2:
+                begin = self.features[i]['begin']
+                std_rho = np.sqrt(P[begin + 5, begin + 5])
+                rho = x[begin + 5]
+                std_d = std_rho / (rho ** 2)
+                theta = x[begin + 3]
+                phi = x[begin + 4]
+                mi = mathematics.m(theta, phi)
+                x_c1 = x[begin:begin + 3]
+                x_c2 = x[0:3]
+                xyz = np.zeros(3, dtype=np.float32)
+                xyz = x_c2 + (1 / rho) * mi
+                temp = xyz - x_c2
+                temp2 = xyz - x_c1
+                d_c2p = np.linalg.norm(temp)
+                cos_alpha = (np.dot(temp.T, temp2) / (d_c2p * np.linalg.norm(temp2)))
+                linearity_index = 4 * std_d * cos_alpha / d_c2p
+                if linearity_index < lin_index_thresh:
+                    x2 = np.zeros(x.shape[0]-3, dtype=np.float32)
+                    x2[0:begin] = x[0:begin]
+                    x2[begin:begin + 3] = x[begin:begin + 6]
+                    if x.shape[0] > begin + 6:
+                        x2[begin + 3:] = x[begin + 6:]
+                    J = np.zeros([3, 6], dtype=np.float32)
+                    J[0:3, 0:3] = np.identity(3, dtype=np.float32)
+                    J[3, :] = (1 / rho) * [np.cos(phi) * np.cos(theta), 0, -np.cos(phi) * np.sin(theta)]
+                    J[4, :] = (1 / rho) * [-np.sin(phi) * np.sin(theta), -np.cos(phi), -np.sin(phi) * np.cos(theta)]
+                    J[5, :] = mi / rho ** 2
+                    Jall = np.zeros([P.shape[0], P.shape[1]-3], dtype=np.float32)
+                    Jall[0:begin, 0:begin] = np.identity(begin, dtype=np.float32)
+                    Jall[begin:begin + J.shape[0], begin:begin + J.shape[1]] = J
+                    if x.shape[0] > begin + 6:     
+                        Jall[begin + J.shape[0]:, begin + J.shape[1]] = np.identity(Jall[begin + J.shape[0]:, begin + J.shape[1]].shape[0], dtype=np.float32)
+                    P2 = np.dot(np.dot(Jall, P), Jall.T)
+                    convert = 1
+                                    
+        return x, P
     
     def initializeFeatures(self, x, P, inparams, frame, step, num_of_features):
         max_attempts = 50
@@ -93,6 +138,60 @@ class map:
         return x, P
     
     def initializeFeature(self, x, P, inparams, frame, step):
+        half_patch_wi = 20
+        half_patch_wm = 6
+        excluded_band = half_patch_wi + 1
+        max_init_attemprs = 1
+        init_box_size = [60, 40]
+        init_box_semisize = [30, 20]
+        init_rho = 1
+        std_rho = 1
+        std_pxl = inparams['sd']
+        rand_attemt = 1
+        not_empty_box = 1
+        detected_new = 0
+        # newFeature, newFeatureY
+        nF = np.ones(2, dtype=np.float32)
+        self.predictCameraMeasurements(inparams, x)
+        
+        for i in range(max_init_attempts):
+            if detected_new == 1:
+                return 1
+            areThereCorners = 0            
+            areThereFeatures = 0            
+            regionCenter = np.random.random_sample(2)
+            regionCenter[0] = np.floor(regionCenter[0] * (inparams['width'] - 2 * excluded_band - 2 * init_box_semisize[0] + 0.5) + excluded_band + init_box_semisize[0])
+            regionCenter[1] = np.floor(regionCenter[1] * (inparams['height'] - 2 * excluded_band - 2 * init_box_semisize[1] + 0.5) + excluded_band + init_box_semisize[1])
+            for j in range(len(self.features)):
+                if ((self.features[j]['h'] > regionCenter[0] - init_box_semisize[0]) and 
+                    (self.features[j]['h'] < regionCenter[0] + init_box_semisize[0]) and
+                    (self.features[j]['h'] > regionCenter[1] - init_box_semisize[1]) and 
+                    (self.features[j]['h'] < regionCenter[1] + init_box_semisize[1])):  
+                    areThereFeatures = 1
+                    break
+            if areThereFeatures == 1:
+                continue
+            frame_part = frame[regionCenter[1] - init_box_semisize[1]:regionCenter[1] + init_box_semisize[1], regionCenter[0] - init_box_semisize[0]:regionCenter[0] + init_box_semisize[0]]
+            
+            kp = detectors.detect("FAST", frame_part) 
+            kp_mat = np.zeros([len(fp), 2], dtype=np.float32)
+            for i in range(len(fp)):
+                (xp, yp) = kp[i].pt
+                fp_mat[i,:] = [xp, yp]
+            if len(fp) > 0:
+                temp = np.ones()
+                temp[:, 0] *= (- init_box_semisize[0] + region_center[0] - 1)
+                temp[:, 1] *= (- init_box_semisize[1] + region_center[1] - 1)
+                fp_mat += temp
+                areThereCorners = 1
+
+            if areThereCorners == 1:
+                nF = fp_mat[0,:].T
+                detected_new = 1
+            
+            if nF[0] * nF[1] >= 0:
+                temp = nF
+                x, P = self.addFeaturesID(temp, x, P, inparams, init_rho, std_rho)
         pass     
     
     def predictCameraMeasurements(self, inparams, x):
@@ -151,14 +250,66 @@ class map:
                     xyz_w = mathematics.id2cartesian(x[begin:begin + 6])                    
                     self.feature[i]['patch'] = self.pred_patch_fc(self.features[i], r, R, xyz_w, inparams)
                     
-    def pred_patch_fc(self, feature, r, R, xyz, inparams):
-        pass
+    def pred_patch_fc(self, f, r, R, xyz, inparams):
+        uv_p = f['h']
+        half_patch_wm = f['half_patch_size_wm']
+        
+        if((uv_p[0] > half_patch_wm) and (uv_p[0] < inparams['width']- half_patch_wm) and \
+           (uv_p[1] > half_patch_wm) and (uv_p[1] < inparams['height']- half_patch_wm)):
+            uv_p_f = f['init_measurement']
+            R_Wk_p_f = f['rotation']    
+            r_Wk_p_f = f['position']
+            Temp1 = np.zeros([4, 4], dtype=np.float32)
+            Temp2 = np.zeros([4, 4], dtype=np.float32)            
+            Temp1[0:3, 0:3] = R_Wk_p_f
+            Temp2[0:3, 3] = r_Wk_p_f
+            H_Wk_p_f = np.dot(Temp1, Temp2)
+            Temp1[0:3, 0:3] = R
+            Temp2[0:3, 3] = r
+            H_Wk = np.dot(Temp1, Temp2)            
+            H_kpf_k = np.dot(H_Wk_p_f.T, H_Wk)
+            patch_p_f = f['patch_wi']
+            half_patch_wi = f['half_patch_size_wi']
+            n1 = np.zeros(3, dtype=np.float32)
+            n2 = np.zeros(3, dtype=np.float32)
+            n1[:] = [uv_p_f[0] - inparams['u0'], uv_p_f[1] - inparams['v0'], - inparams['fku']]
+            nv[:] = [uv_p[0] - inparams['u0'], uv_p[1] - inparams['v0'], - inparams['fku']]
+            Temp = np.zeros(4, dtype=np.float32)    
+            Temp[0:3] = n2, Temp[3] = 1
+            Temp = np.dot(H_kpf_k, Temp)
+            Temp = Temp / Temp[3]
+            n2 = Temp[0:3]
+            n1 = n1 / np.linalg.norm(n1)
+            n2 = n2 / np.linalg.norm(n2)      
+            n = n1 + n2
+            n = n / np.linalg.norm(n)      
+            Temp[0:3] = XYZ_w, Temp[3] = 1
+            XYZ_kpf = np.dot(np.linalg.inv(H_Wk_p_f), Temp)
+            XYZ_kpf = XYZ_kpf / XYZ_kpf[3]
+            d = n[0] * XYZ_kpf[0] - n[1] * XYZ_kpf[1] - n[2] * XYZ_kpf[2]
+            H3x3 = H_kpf_k[0:3, 0:3]
+            H3x1 = H_kpf_k[0:3, 3]
+            uv_p_pred_patch = mathematics.rotate_with_dist_fc_c2c1(uv_p_f, H3x3, H3x1, n, d, inparams);
+            uv_c2 = np.zeros(2, dtype=np.float32)             
+            uv_c1 = uv_p_pred_patch - half_patch_wm
+            uv_c2 = mathematics.rotate_with_dist_fc_c1c2(uv_c1, H3x3, H3x1, n, d, inparams);
+            uv_c2 = np.floor((uv_c2 - uv_p_f)-half_patch_wi - 1)-1
+            uv_c2[0] = max(uv_c2[0], 0)
+            uv_c2[1] = max(uv_c2[1], 0) 
+            if (uv_c2[0] >= patch_p_f.shape[1] - 2 * half_patch_wm):
+                uv_c2[0] -= (2 * half_patch_wm + 2)
+            if (uv_c2[1] >= patch_p_f.shape[0] - 2 * half_patch_wm):
+                uv_c2[1] -= (2 * half_patch_wm + 2)
+            patch = patch_p_f[uv_c2[1], uv_c2[0], 2 * half_patch_wm-1, 2 * half_patch_wm-1]
+        else:
+            patch = None
+        return patch
     
-    def addFeaturesID(self, uvd, x, P, newFeature, inparams, init_rho, std_rho):
+    def addFeaturesID(self, uvd, x, P, inparams, init_rho, std_rho):
         xv = x[0:13]
-        xf = mathmeatics.hinv(uvd, xv, inparams, init_rho)
+        xf = mathematics.hinv(uvd, xv, inparams, init_rho)
         x = np.concatenate(x, xf)
-        P = self.addFeatureCovarianceID()
+        P = self.addFeatureCovarianceID(uvd, x, P, inparams, init_rho, std_rho)
         return x, P
     
     def addFeatureCovarianceID(self, uvd, x, P, inparams, init_rho, std_rho):
