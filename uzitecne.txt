@@ -1,0 +1,93 @@
+========================================================================
+
+void setInputParamStruct(InputParams *IP, int cam, int w, int h,
+                         double u0, double v0, double fku, double fkv, double kd1, double kd2, double sd, double d)
+{
+  IP->cameraNumber = cam;
+	IP->width = w;
+	IP->height = h;
+	IP->u0 = u0;
+	IP->v0 = v0;
+	IP->fku = fku;
+	IP->fkv = fkv;
+	IP->kd1 = kd1;
+	IP->kd2 = kd2;
+	IP->sd = sd;
+  IP->d = d;
+}
+
+========================================================================
+
+// wi means when initialized
+// wm means when matching
+class feature 
+{
+	public : 
+		EIGEN_MAKE_ALIGNED_OPERATOR_NEW	
+
+    Eigen::MatrixXd patch_wi;
+    Eigen::MatrixXd patch_wm;
+    Eigen::Vector3d position; // means r_wc in civera, davison work
+    Eigen::Matrix3d rotation; // means R_wc in civera, davison work
+    int half_patch_size_wi;
+    int half_patch_size_wm;
+    int times_predicted;
+    int times_measured;
+    int init_frame;
+    int type; // 0 - inv_depth , 1 - cartesian
+    Eigen::Vector2d init_measurement;
+    Eigen::Vector2d uv_wi;
+    Eigen::VectorXd y;
+    int individually_compatible;
+    int low_innovation_inlier; 
+    int high_innovation_inlier;
+    Eigen::Vector2d z;
+    Eigen::Vector2d h;
+    Eigen::MatrixXd H;
+    Eigen::MatrixXd S;
+    int size;
+    int measurement_size;
+    int begin;
+    Eigen::Matrix2d R;
+
+
+
+    feature();
+    feature(Eigen::MatrixXd &im, Eigen::Vector2d &uv, Eigen::VectorXd &camPos, int step, Eigen::VectorXd &newFeature, int begin);
+    ~feature();
+    
+
+};
+
+#endif
+
+========================================================================
+
+feature::feature(Eigen::MatrixXd &im, Eigen::Vector2d &uv, Eigen::VectorXd &camPos, int step, Eigen::VectorXd &newFeature, int pBegin)
+{
+  this->measurement_size = 2;
+  this->size = 6;
+  this->times_predicted = 0;
+  this->times_measured = 0;
+  this->individually_compatible = 0;
+  this->low_innovation_inlier = 0;
+  this->high_innovation_inlier = 0;
+  this->position << camPos(0), camPos(1), camPos(2);
+  q2r(this->rotation, camPos(3), camPos(4), camPos(5), camPos(6));
+  this->init_frame = step;
+  this->init_measurement = uv;
+  this->uv_wi = uv;
+  this->y.resize(6,1);
+  this->y = newFeature;
+  this->half_patch_size_wi = 20;
+  this->half_patch_size_wm = 6;
+  this->patch_wm.resize(im.rows(), im.cols());
+  this->patch_wi.resize(im.rows(), im.cols());
+  this->patch_wi = im;
+  this->R.setIdentity();
+  this->type = 0;
+  this->h << -1000000 , -1000000;
+  this->z << -1000000 , -1000000;
+  this->H.setZero();
+  this->S.setZero();
+  this->begin = pBegin;
