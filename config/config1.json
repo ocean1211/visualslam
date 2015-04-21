@@ -14,6 +14,10 @@
         "/home/neduchal/Dokumenty/datasety/08/image_0/"        
     ],
 
+    "input_parameters" : [
+        "file",
+        "./parameters1.cjson" 
+    ]	
 
     "detector" : {
         "type" : "surf",

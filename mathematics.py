@@ -133,64 +133,51 @@ def q2r(q): # matrix representation of quaternion
     return R   
 
 def xyz_dh_dy(inparams, xv, y, zi):
-    pass
-
-def xyz_dhrl_dy(xv):
-    pass
-
-def xyz_dh_dxv(inparams, xv, y, zi):
-    pass
-
-def xyz_dh_dqwr(inparams, xv, y, zi):
-    pass
-
-def xyz_dhrl_dqwr(xv, y):
-    pass
-
-def xyz_dh_drw(inparams, xv, y, zi):
-    pass
-
-def xyz_dhrl_drw(xv):
-    pass
+    xyz_dhrl_dy = np.linalg.inv(q2r(xv))
+    return np.dot(xyz_dh_dhrl(inparams,xv, y, zi),xyz_dhrl_dy)
 
 def xyz_dh_dhrl(inparams, xv, y, zi):
-    pass
+    Rrw = np.linalg.inv(q2r(xv))
+    xyz_dhd_dhu = np.linalg.inv(jacob_undistort_fm(zi, inparams))
+    
+    hrl = np.dot(Rrw, y - x[0:3] )
+    xyz_dhu_dhrl = np.zeros([2,3], dtype = np.double)
+    xyz_dhu_dhrl[:,:] = [[inparams['fku']/hrl[2], 0 , -hrl[0]*inparams.fku/(hrl[2]**2)],
+              [ 0 , inparams['fkv']/hrl[2] , -hrl[0]*inparams.fkv/(hrl[2]**2)]]
+    a =  np.dot(xyz_dhd_dhu, xyz_dhu_dhrl)               
+    return a
 
-def xyz_dhd_dhu(inparams, zi):
-    pass
+def xyz_dh_dxv(inparams, xv, y, zi):
+    
+    xyz_dhrl_drw = -1 * np.linalg.inv(q2r(xv[3:6]))
+    xyz_dh_drw = np.dot(xyz_dh_dhrl(inparams, xv, y, zi), xyz_dhrl_drw)
+    
+    
+    dqbar_dq = np.double(np.diag([1,-1,-1,-1]))    
+    q = np.array([xv[3], -xv[4], -xv[5], -xv[6]], dtype = np.double)
+    xyz_dhrl_dqwr = np.dot(dRq_times_a_by_dq(q,(y - xv[0:3])), dqbar_dq)    
+    xyz_dh_dqwr = np.dot(xyz_dh_dhrl(inparams, xv, y, zi), xyz_dhrl_dqwr)
+    
+    Hi1 = np.concatenate([xyz_dh_drw, xyz_dh_dqwr, np.zeros([2,6], dtype = np.double)], axis = 1)
+    
+    return Hi1
 
-def xyz_dhu_dhrl(inparams, xv, y):
-    pass
+
+
 
 def id_dh_dy(inparams, xv, y, zi):
-    pass
+    id_dhrl_dy = np.linalg.inv(q2r(xv))
+    return np.dot(id_dh_dhrl(inparams,xv, y, zi),id_dhrl_dy)
 
-def id_dhrl_dy(xv, y):
+def id_dh_dhrl(inparams, xv, y, zi):
     pass
 
 def id_dh_dxv(inparams, xv, y, zi):
     pass
 
-def id_dh_dqwr(inparams, xv, y, zi):
-    pass
 
-def id_dhrl_dqwr(xv, y):
-    pass
 
-def id_dh_drw(inparams, xv, y, zi):
-    pass
 
-def id_dhrl_drw(xv, y):
-    pass
-
-def id_dh_dhrl(inparams, xv, y, zi):
-    pass
-
-def id_dhd_dhu(inparams, zi):
-    pass
-
-def id_dhu_dhrl(inparams, xv, y):
-    pass
 
 def distort_fm(uv_u, inparams):
     
@@ -200,8 +187,9 @@ def undistort_fm(uv_d, inparams):
     
     pass
 
-def jacob_undistort_fm(j_un, uv_d, inparams):
-    pass
+def jacob_undistort_fm(uv_d, inparams):
+    
+    return j_un
 
 def hinv(newFeature, uv_d, xv, inparams, initRho):
     pass

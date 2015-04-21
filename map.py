@@ -96,7 +96,7 @@ class map:
                 mi = mathematics.m(theta, phi)
                 x_c1 = x[begin:begin + 3]
                 x_c2 = x[0:3]
-                xyz = np.zeros(3, dtype=np.float32)
+                xyz = np.zeros(3, dtype=np.double)
                 xyz = x_c2 + (1 / rho) * mi
                 temp = xyz - x_c2
                 temp2 = xyz - x_c1
@@ -104,21 +104,21 @@ class map:
                 cos_alpha = (np.dot(temp.T, temp2) / (d_c2p * np.linalg.norm(temp2)))
                 linearity_index = 4 * std_d * cos_alpha / d_c2p
                 if linearity_index < lin_index_thresh:
-                    x2 = np.zeros(x.shape[0]-3, dtype=np.float32)
+                    x2 = np.zeros(x.shape[0]-3, dtype=np.double)
                     x2[0:begin] = x[0:begin]
                     x2[begin:begin + 3] = x[begin:begin + 6]
                     if x.shape[0] > begin + 6:
                         x2[begin + 3:] = x[begin + 6:]
-                    J = np.zeros([3, 6], dtype=np.float32)
-                    J[0:3, 0:3] = np.identity(3, dtype=np.float32)
+                    J = np.zeros([3, 6], dtype=np.double)
+                    J[0:3, 0:3] = np.identity(3, dtype=np.double)
                     J[3, :] = (1 / rho) * [np.cos(phi) * np.cos(theta), 0, -np.cos(phi) * np.sin(theta)]
                     J[4, :] = (1 / rho) * [-np.sin(phi) * np.sin(theta), -np.cos(phi), -np.sin(phi) * np.cos(theta)]
                     J[5, :] = mi / rho ** 2
-                    Jall = np.zeros([P.shape[0], P.shape[1]-3], dtype=np.float32)
-                    Jall[0:begin, 0:begin] = np.identity(begin, dtype=np.float32)
+                    Jall = np.zeros([P.shape[0], P.shape[1]-3], dtype=np.double)
+                    Jall[0:begin, 0:begin] = np.identity(begin, dtype=np.double)
                     Jall[begin:begin + J.shape[0], begin:begin + J.shape[1]] = J
                     if x.shape[0] > begin + 6:     
-                        Jall[begin + J.shape[0]:, begin + J.shape[1]] = np.identity(Jall[begin + J.shape[0]:, begin + J.shape[1]].shape[0], dtype=np.float32)
+                        Jall[begin + J.shape[0]:, begin + J.shape[1]] = np.identity(Jall[begin + J.shape[0]:, begin + J.shape[1]].shape[0], dtype=np.double)
                     P2 = np.dot(np.dot(Jall, P), Jall.T)
                     convert = 1
                                     
@@ -151,7 +151,7 @@ class map:
         not_empty_box = 1
         detected_new = 0
         # newFeature, newFeatureY
-        nF = np.ones(2, dtype=np.float32)
+        nF = np.ones(2, dtype=np.double)
         self.predictCameraMeasurements(inparams, x)
         
         for i in range(max_init_attempts):
@@ -174,7 +174,7 @@ class map:
             frame_part = frame[regionCenter[1] - init_box_semisize[1]:regionCenter[1] + init_box_semisize[1], regionCenter[0] - init_box_semisize[0]:regionCenter[0] + init_box_semisize[0]]
             
             kp = detectors.detect("FAST", frame_part) 
-            kp_mat = np.zeros([len(fp), 2], dtype=np.float32)
+            kp_mat = np.zeros([len(fp), 2], dtype=np.double)
             for i in range(len(fp)):
                 (xp, yp) = kp[i].pt
                 fp_mat[i,:] = [xp, yp]
@@ -226,7 +226,7 @@ class map:
             yi2 += 1
         uv_u1 = inparams['u0'] + (yi(0) / yi2) * inparams['fku']
         uv_u2 = inparams['v0'] + (yi(1) / yi2) * inparams['fkv']
-        uv_u = np.zeros(2, dtype=np.float32)
+        uv_u = np.zeros(2, dtype=np.double)
         uv_u[:] = [uv_u1, uv_u2]
         uv_d = mathematics.distort_fm(uv_u, inparams) 
         
@@ -243,7 +243,7 @@ class map:
         for i in range(len(self.features)):                
             if self.features[i]['h'] != None:
                 begin = self.features[i]['begin']                
-                xyz_w = np.zeros(3, dtype=np.float32)
+                xyz_w = np.zeros(3, dtype=np.double)
                 if self.features[i]['type'] == 1:
                     xyz_w = x[begin:begin + 3]
                 else:
@@ -259,8 +259,8 @@ class map:
             uv_p_f = f['init_measurement']
             R_Wk_p_f = f['rotation']    
             r_Wk_p_f = f['position']
-            Temp1 = np.zeros([4, 4], dtype=np.float32)
-            Temp2 = np.zeros([4, 4], dtype=np.float32)            
+            Temp1 = np.zeros([4, 4], dtype=np.double)
+            Temp2 = np.zeros([4, 4], dtype=np.double)            
             Temp1[0:3, 0:3] = R_Wk_p_f
             Temp2[0:3, 3] = r_Wk_p_f
             H_Wk_p_f = np.dot(Temp1, Temp2)
@@ -270,11 +270,11 @@ class map:
             H_kpf_k = np.dot(H_Wk_p_f.T, H_Wk)
             patch_p_f = f['patch_wi']
             half_patch_wi = f['half_patch_size_wi']
-            n1 = np.zeros(3, dtype=np.float32)
-            n2 = np.zeros(3, dtype=np.float32)
+            n1 = np.zeros(3, dtype=np.double)
+            n2 = np.zeros(3, dtype=np.double)
             n1[:] = [uv_p_f[0] - inparams['u0'], uv_p_f[1] - inparams['v0'], - inparams['fku']]
             nv[:] = [uv_p[0] - inparams['u0'], uv_p[1] - inparams['v0'], - inparams['fku']]
-            Temp = np.zeros(4, dtype=np.float32)    
+            Temp = np.zeros(4, dtype=np.double)    
             Temp[0:3] = n2, Temp[3] = 1
             Temp = np.dot(H_kpf_k, Temp)
             Temp = Temp / Temp[3]
@@ -290,7 +290,7 @@ class map:
             H3x3 = H_kpf_k[0:3, 0:3]
             H3x1 = H_kpf_k[0:3, 3]
             uv_p_pred_patch = mathematics.rotate_with_dist_fc_c2c1(uv_p_f, H3x3, H3x1, n, d, inparams);
-            uv_c2 = np.zeros(2, dtype=np.float32)             
+            uv_c2 = np.zeros(2, dtype=np.double)             
             uv_c1 = uv_p_pred_patch - half_patch_wm
             uv_c2 = mathematics.rotate_with_dist_fc_c1c2(uv_c1, H3x3, H3x1, n, d, inparams);
             uv_c2 = np.floor((uv_c2 - uv_p_f)-half_patch_wi - 1)-1
@@ -315,43 +315,43 @@ class map:
     def addFeatureCovarianceID(self, uvd, x, P, inparams, init_rho, std_rho):
         R = mathematics.q2r(x[3:7])   
         uv_u = mathematics.undistort_fm(uvd, inparams)
-        XYZ_c = np.zeros(3, np.float32)
+        XYZ_c = np.zeros(3, np.double)
         x_c = (-(inparams['u0']-uv_u[0]) / inaparams['fku'])
         y_c = (-(inparams['v0']-uv_u[1]) / inaparams['fkv'])        
         XYZ_c[:] = [x_c, y_c, 1]
         XYZ_w = np.dot(R, XYZ_c)
-        dtheta_dgw = np.zeros(3, np.float32)
+        dtheta_dgw = np.zeros(3, np.double)
         dtheta_dgw[:] = [(XYZ_w[0] / (XYZ_w[0] ** 2 + XYZ_w[2] ** 2)), 0, (-XYZ_w[0] / (XYZ_w[0] ** 2 + XYZ_w[2] ** 2))]
-        dphi_dgw = np.zeros(3, np.float32)
+        dphi_dgw = np.zeros(3, np.double)
         dphi_dgw[:] = [(XYZ_w[0] * XYZ_w[1]) / ((np.sum(XYZ_w ** 2)) * np.sqrt(XYZ_w[0] ** 2 + XYZ_w[2] ** 2)), 
             -np.sqrt(XYZ_w[0] ** 2 + XYZ_w[2] ** 2) / (np.sum(XYZ_w ** 2)),
             (XYZ_w[2] * XYZ_w[1]) / ((np.sum(XYZ_w ** 2)) * np.sqrt(XYZ_w[0] ** 2 + XYZ_w[2] ** 2))]
         dgw_dqwr = mathematics.dRq_times_a_by_dq(q, XYZ_c)
         dtheta_dqwr = np.dot(dtheta_dgw.T, dgw_dqwr)
         dphi_dqwr = np.dot(dphi_dgw.T, dgw_dqwr)
-        dy_dqwr = np.zeros([6, 4], dtype=np.float32)
+        dy_dqwr = np.zeros([6, 4], dtype=np.double)
         dy_dqwr[3, 0:4] = dtheta_dqwr.T
         dy_dqwr[4, 0:4] = dphi_dqwr.T
-        dy_drw = np.zeros([6, 3], dtype=np.float32)
-        dy_drw[0:3, 0:3] = np.identity(3, dtype=np.float32)
-        dy_dxv = np.zeros([6, 13], dtype=np.float32)
+        dy_drw = np.zeros([6, 3], dtype=np.double)
+        dy_drw[0:3, 0:3] = np.identity(3, dtype=np.double)
+        dy_dxv = np.zeros([6, 13], dtype=np.double)
         dy_dxv[0:6, 0:3] = dy_drw
         dy_dxv[0:6, 4:8] = dy_drw  
-        dyprima_dgw = np.zeros([5, 3], dtype=np.float32)
+        dyprima_dgw = np.zeros([5, 3], dtype=np.double)
         dyprima_dgw[3, 0:3] = dtheta_dgw.T
         dyprima_dgw[4, 0:3] = dphi_dgw.T
         dgw_dgc = R
-        dgc_dhu = np.zeros([3, 2], dtype=np.float32)
+        dgc_dhu = np.zeros([3, 2], dtype=np.double)
         dgc_dhu[:] = [[1 / inparams['fku'], 0, 0][1 / inparams['fkv'], 0, 0]]
         dhu_dhd = mathematics.jacob_undistord_fm(uv, inparams)
         dyprima_dhd = np.dot(np.dot(np.dot(dyprima_dgw, dgw_dgc), dgc_dhu), dhu_dhd)
-        dy_dhd = np.zeros([6, 3], dtype=np.float32)
+        dy_dhd = np.zeros([6, 3], dtype=np.double)
         dy_dhd[0:5, 0:2] = dyprima_dhd
         dy_dhd[5, 2] = 1         
-        Padd = np.zeros([3, 3], dtype=np.float32)
-        Padd[0:2, 0:2] = np.identity(2, dtype=np.float32) * inparams['sd'] ** 2
+        Padd = np.zeros([3, 3], dtype=np.double)
+        Padd[0:2, 0:2] = np.identity(2, dtype=np.double) * inparams['sd'] ** 2
         Padd[2, 2] = std_rho
-        P2 = np.zeros([P.shape[0] + 6, P.shape[1] + 6], dtype=np.float32)
+        P2 = np.zeros([P.shape[0] + 6, P.shape[1] + 6], dtype=np.double)
         P2[0:P.shape[0], 0:P.shape[1]] = P
         P2[P.shape[0]:P.shape[0] + 6, 0:13] = np.dot(dy_dxv, P[0:13, 0:13])
         P2[0:13, P.shape[1]:P.shape[1] + 6] = np.dot(P[0:13, 0:13], dy_dxv.T)
@@ -409,7 +409,7 @@ class map:
     def H_XYZ(self, xv, y, inparams, sizeX, begin):
         zi = f['h']        
         num_of_features = len(self.features)
-        Hi = np.zeros([2, sizeX], dtype=np.float32)
+        Hi = np.zeros([2, sizeX], dtype=np.double)
         Hi[:, 0:13] = xyz_dh_dxv(inparams, xv, y, zi)
         Hi[:, begin:begin + 3] = xyz_dh_dx(inparams, xv, y, zi)        
         return Hi
@@ -417,7 +417,7 @@ class map:
     def H_ID(self, xv, y, inparams, f):
         zi = f['h']        
         num_of_features = len(self.features)
-        Hi = np.zeros([2, sizeX], dtype=np.float32)
+        Hi = np.zeros([2, sizeX], dtype=np.double)
         Hi[:, 0:13] = id_dh_dxv(inparams, xv, y, zi)
         Hi[:, begin:begin + 6] = id_dh_dx(inparams, xv, y, zi)        
         return Hi   
