@@ -20,6 +20,7 @@
   <component name="ProjectModuleManager">
     <modules />
   </component>
+<<<<<<< HEAD
   <component name="ProjectRootManager" version="2" project-jdk-name="Python 2.7.6 (/usr/bin/python2.7)" project-jdk-type="Python SDK" />
   <component name="PropertiesComponent">
     <property name="options.lastSelected" value="configurable.group.appearance" />
@@ -31,6 +32,9 @@
       <console-settings />
     </option>
   </component>
+=======
+  <component name="ProjectRootManager" version="2" project-jdk-name="Python 2.7.6 (C:\Python27\python.exe)" project-jdk-type="Python SDK" />
+>>>>>>> b35a7f715e0bfea898c1ba3022488c9434305cac
   <component name="RunManager">
     <list size="0" />
   </component>
