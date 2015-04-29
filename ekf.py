@@ -9,11 +9,11 @@ EKF
 
 # importy
 import mathematics
-from models import *
 import numpy as np
 
+
 # trida rozsireneho kalmanova filtru
-class ekf():
+class Ekf:
 
     # konstruktor
     def __init__(self, dt, lin, ang, img): 
@@ -28,34 +28,34 @@ class ekf():
         self.ang_dev = ang  
         self.image_noise = img
         pass
-		
+
     # krok predikce
-    def predict(self, model, delta_t):
+    def predict(self):
         # Camera motion prediction fv and features prediction      
-        self.x_p = self.predictCameraMotion()
+        self.predictCameraMotion()
         # Camera motion prediction jacobian  dfv by dxv
-        jacobian_fv_xv = self.predictMotionJacobian();
+        jacobian_fv_xv = self.predictMotionJacobian()
         lincov = self.lin_dev ** 2 * self.dtime ** 2
         angcov = self.ang_dev ** 2 * self.dtime ** 2
         
-        Pn = np.zeros([6, 6], dtype=np.float32)
-        Pn[0:3, 0:3] = np.identity([3, 3]) * lincov 
-        Pn[3:6, 3:6] = np.identity([3, 3]) * angcov 
+        mat_pn = np.zeros([6, 6], dtype=np.float32)
+        mat_pn[0:3, 0:3] = np.identity(3) * lincov
+        mat_pn[3:6, 3:6] = np.identity(3) * angcov
         
-        G = np.zeros([13, 6], dtype=np.float32)
-        G[7:10, 0:3] = np.identity([3, 3])
-        G[10:13, 3:6] = np.identity([3, 3])
-        G[0:3, 0:3] = np.identity([3, 3]) * self.dtime     
+        mat_g = np.zeros([13, 6], dtype=np.float32)
+        mat_g[7:10, 0:3] = np.identity(3)
+        mat_g[10:13, 3:6] = np.identity(3)
+        mat_g[0:3, 0:3] = np.identity(3) * self.dtime
         
         temp4x4 = mathematics.dq3_by_dq1(self.x[3:7])
-        temp4x3 = dq_omega_dt(self.x[10:13], self.dtime)
-        G[3:7, 3:6] = np.dot(temp4x4, temp4x3) 
+        temp4x3 = mathematics.dq_omega_dt(self.x[10:13], self.dtime)
+        mat_g[3:7, 3:6] = np.dot(temp4x4, temp4x3)
         
-        Q = np.dot(np.dot(G, Pn), G.T)
+        mat_q = np.dot(np.dot(mat_g, mat_pn), mat_g.T)
         
         self.P_p = np.zeros(self.P.shape, dtype=np.float32)
-        self.P_p[0:13, 0:13] = np.dot(np.dot(jacobian_fv_xv, self.P), jacobian_fv_xv.T)
-        if (self.P.shape[0] > 13):
+        self.P_p[0:13, 0:13] = np.dot(np.dot(jacobian_fv_xv, self.P), jacobian_fv_xv.T) + mat_q
+        if self.P.shape[0] > 13:
             self.P_p[13:, 13:] = self.P[13:, 13:]
             self.P_p[0:13, 13:] = np.dot(jacobian_fv_xv, self.P_p[0:13, 13:])
             self.P_p[13:, 0:13] = np.dot(self.P_p[0:13, 13:], jacobian_fv_xv.T)
@@ -70,15 +70,16 @@ class ekf():
         self.x_p[0:3] = r + v * self.dtime
         self.x_p[3:7] = q * mathematics.qprod(q, qwt)
     
-    def predictMotionJacobian(self):  
+    def predictMotionJacobian(self):
         jacobian_fv_xv = np.identity([13, 13], dtype=np.float32)        
         temp3x3A = np.identity([13, 13]) * self.dtime
         jacobian_fv_xv[0:3, 7:10] = temp3x3A
         qwt = mathematics.QuaternionFromAngularVelocity(self.x[10:13] * self.dtime)
         jacobian_fv_xv[3:7, 3:7] = mathematics.dq3_by_dq2(qwt)
         temp4x4 = mathematics.dq3_by_dq1(self.x[3:7])
-        temp4x3 = dq_omega_dt(self.x[10:13], self.dtime)
+        temp4x3 = mathematics.dq_omega_dt(self.x[10:13], self.dtime)
         jacobian_fv_xv[3:7, 10:13] = np.dot(temp4x4, temp4x3)
+        return jacobian_fv_xv
         
 #krok filtrace
     def update(self, H, R, z, h):

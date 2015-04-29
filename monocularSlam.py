@@ -19,7 +19,7 @@ class slam:
     def init(self):
         
         # EKF filter init
-        filter = ekf.ekf(self.params["dtime"], 0.007, 0.007, 1.0)
+        filter = ekf.Ekf(self.params["dtime"], 0.007, 0.007, 1.0)
         
         v0 = 0;
         w0 = 1.0e-15;
