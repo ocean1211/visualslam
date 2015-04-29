@@ -31,6 +31,7 @@ class Map:
         :param min_num_of_features:
         :return:
         """
+        print step
         self.delete_features(x, cov)
         measured = 0
         for feature in self.features:
@@ -39,7 +40,7 @@ class Map:
         self.update_features_info()
         x, cov = self.inverse_depth2xyz(x, cov)
         if measured < min_num_of_features:
-            x, cov = self.initializeFeatures(x, cov, inparams, frame, inparams, min_num_of_features - measured)
+            x, cov = self.initialize_features(x, cov, inparams, frame, inparams, min_num_of_features - measured)
             return x, cov
 
     def delete_features(self, x, cov):
@@ -105,18 +106,18 @@ class Map:
         self.features[i]['S'] = None
         pass
 
-    def inverse_depth2xyz(self, x, P):
+    def inverse_depth2xyz(self, x, cov):
         lin_index_thresh = 0.1
         convert = 0
 
         for i in range(len(self.features)):
-            if (convert == 1):
+            if convert == 1:
                 self.features[i]['begin'] -= 3
                 continue
 
             if self.features[i]['type'] == 2:
                 begin = self.features[i]['begin']
-                std_rho = np.sqrt(P[begin + 5, begin + 5])
+                std_rho = np.sqrt(cov[begin + 5, begin + 5])
                 rho = x[begin + 5]
                 std_d = std_rho / (rho ** 2)
                 theta = x[begin + 3]
@@ -124,7 +125,6 @@ class Map:
                 mi = mathematics.m(theta, phi)
                 x_c1 = x[begin:begin + 3]
                 x_c2 = x[0:3]
-                xyz = np.zeros(3, dtype=np.double)
                 xyz = x_c2 + (1 / rho) * mi
                 temp = xyz - x_c2
                 temp2 = xyz - x_c1
@@ -132,41 +132,41 @@ class Map:
                 cos_alpha = (np.dot(temp.T, temp2) / (d_c2p * np.linalg.norm(temp2)))
                 linearity_index = 4 * std_d * cos_alpha / d_c2p
                 if linearity_index < lin_index_thresh:
-                    x2 = np.zeros(x.shape[0] - 3, dtype=np.double)
+                    x2 = np.zeros(x.shape[0] - 3, dtype=np.float32)
                     x2[0:begin] = x[0:begin]
                     x2[begin:begin + 3] = x[begin:begin + 6]
                     if x.shape[0] > begin + 6:
                         x2[begin + 3:] = x[begin + 6:]
-                    J = np.zeros([3, 6], dtype=np.double)
-                    J[0:3, 0:3] = np.identity(3, dtype=np.double)
-                    J[3, :] = (1 / rho) * [np.cos(phi) * np.cos(theta), 0, -np.cos(phi) * np.sin(theta)]
-                    J[4, :] = (1 / rho) * [-np.sin(phi) * np.sin(theta), -np.cos(phi), -np.sin(phi) * np.cos(theta)]
-                    J[5, :] = mi / rho ** 2
-                    Jall = np.zeros([P.shape[0], P.shape[1] - 3], dtype=np.double)
-                    Jall[0:begin, 0:begin] = np.identity(begin, dtype=np.double)
-                    Jall[begin:begin + J.shape[0], begin:begin + J.shape[1]] = J
+                    mat_j = np.zeros([3, 6], dtype=np.float32)
+                    mat_j[0:3, 0:3] = np.identity(3, dtype=np.float32)
+                    mat_j[3, :] = (1 / rho) * [np.cos(phi) * np.cos(theta), 0, -np.cos(phi) * np.sin(theta)]
+                    mat_j[4, :] = (1 / rho) * [-np.sin(phi) * np.sin(theta), -np.cos(phi), -np.sin(phi) * np.cos(theta)]
+                    mat_j[5, :] = mi / rho ** 2
+                    Jall = np.zeros([cov.shape[0], cov.shape[1] - 3], dtype=np.float32)
+                    Jall[0:begin, 0:begin] = np.identity(begin, dtype=np.float32)
+                    Jall[begin:begin + mat_j.shape[0], begin:begin + mat_j.shape[1]] = mat_j
                     if x.shape[0] > begin + 6:
-                        Jall[begin + J.shape[0]:, begin + J.shape[1]] = np.identity(
-                            Jall[begin + J.shape[0]:, begin + J.shape[1]].shape[0], dtype=np.double)
-                    P2 = np.dot(np.dot(Jall, P), Jall.T)
+                        Jall[begin + mat_j.shape[0]:, begin + mat_j.shape[1]] = np.identity(
+                            Jall[begin + mat_j.shape[0]:, begin + mat_j.shape[1]].shape[0], dtype=np.float32)
+                    P2 = np.dot(np.dot(Jall, cov), Jall.T)
                     convert = 1
 
-        return x, P
+        return x, cov
 
-    def initializeFeatures(self, x, P, inparams, frame, step, num_of_features):
+    def initialize_features(self, x, cov, inparams, frame, step, num_of_features):
         max_attempts = 50
         attempts = 0
         initialized = 0
 
-        while ((initialized < num_of_features) and (attempts < max_attempts)):
+        while (initialized < num_of_features) and (attempts < max_attempts):
             size = x.shape[0]
             attempts += 1
-            x, P = initializeFeature(x, P, inparams, frame, step)
+            x, cov = self.initialize_feature(x, cov, inparams, frame, step)
             if size < x.shape[0]:
                 initialized += 1
-        return x, P
+        return x, cov
 
-    def initializeFeature(self, x, P, inparams, frame, step):
+    def initialize_feature(self, x, P, inparams, frame, step):
         half_patch_wi = 20
         half_patch_wm = 6
         excluded_band = half_patch_wi + 1
@@ -181,7 +181,7 @@ class Map:
         detected_new = 0
         # newFeature, newFeatureY
         nF = np.ones(2, dtype=np.double)
-        self.predictCameraMeasurements(inparams, x)
+        self.predict_camera_measurements(inparams, x)
 
         for i in range(max_init_attempts):
             if detected_new == 1:
@@ -228,45 +228,45 @@ class Map:
                 x, P = self.addFeaturesID(temp, x, P, inparams, init_rho, std_rho)
         pass
 
-    def predictCameraMeasurements(self, inparams, x):
+    def predict_camera_measurements(self, inparams, x):
         r = x[0:3]
-        R = mathematics.q2r(x[3:7])
-        begin = self.features[i]['begin']
+        mat_r = mathematics.q2r(x[3:7])
         for i in range(len(self.features)):
+            begin = self.features[i]['begin']
             if self.features[i]['type'] == 1:
                 yi = x[begin:begin + 3]
-                hi = self.hi(yi, r, R, inparams)
+                hi = self.hi(yi, r, mat_r, inparams)
             else:
                 yi = x[begin:begin + 6]
-                hi = self.hi(yi, r, R, inparams)
+                hi = self.hi(yi, r, mat_r, inparams)
             self.features[i]['h'] = hi
         pass
 
     # ID = inverse depth
-    def hi(self, yi, r, R, inparams):
+    def hi(self, yi, r, mat_r, inparams):
         if yi.shape[0] > 3:
             theta, phi, rho = yi[[3, 4, 5]]
             mv = mathematics.m
-            hrl = np.dot(R.T, (yi[0:3] - r)) * rho + mv
+            hrl = np.dot(mat_r.T, (yi[0:3] - r)) * rho + mv
         else:
-            hrl = np.dot(R.T, (yi - r))
-        if ((math.atan2(hrl(0), hrl(2)) * 180 / math.pi < -60) or \
-                    (math.atan2(hrl(0), hrl(2)) * 180 / math.pi > 60) or \
-                    (math.atan2(hrl(1), hrl(2)) * 180 / math.pi < -60) or \
-                    (math.atan2(hrl(1), hrl(2)) * 180 / math.pi > 60)):
+            hrl = np.dot(mat_r.T, (yi - r))
+        if ((math.atan2(hrl(0), hrl(2)) * 180 / math.pi < -60) or
+                (math.atan2(hrl(0), hrl(2)) * 180 / math.pi > 60) or
+                (math.atan2(hrl(1), hrl(2)) * 180 / math.pi < -60) or
+                (math.atan2(hrl(1), hrl(2)) * 180 / math.pi > 60)):
             return None
         yi2 = yi(2)
-        if (yi2 == 0):
+        if yi2 == 0:
             yi2 += 1
         uv_u1 = inparams['u0'] + (yi(0) / yi2) * inparams['fku']
         uv_u2 = inparams['v0'] + (yi(1) / yi2) * inparams['fkv']
-        uv_u = np.zeros(2, dtype=np.double)
+        uv_u = np.zeros(2, dtype=np.float32)
         uv_u[:] = [uv_u1, uv_u2]
         uv_d = mathematics.distort_fm(uv_u, inparams)
 
         # is feature visible ?
-        if ((uv_d[0] > 0) and (uv_d[0] < inparams['w']) and \
-                    (uv_d[1] > 0) and (uv_d[1] < inparams['h'])):
+        if ((uv_d[0] > 0) and (uv_d[0] < inparams['w']) and
+                (uv_d[1] > 0) and (uv_d[1] < inparams['h'])):
             return uv_d
         else:
             return None
@@ -275,16 +275,15 @@ class Map:
         r = x[0:3]
         R = mathematics.q2r(x[3:7])
         for i in range(len(self.features)):
-            if self.features[i]['h'] != None:
+            if self.features[i]['h'] is not None:
                 begin = self.features[i]['begin']
-                xyz_w = np.zeros(3, dtype=np.double)
                 if self.features[i]['type'] == 1:
                     xyz_w = x[begin:begin + 3]
                 else:
                     xyz_w = mathematics.id2cartesian(x[begin:begin + 6])
-                    self.feature[i]['patch'] = self.pred_patch_fc(self.features[i], r, R, xyz_w, inparams)
+                self.features[i]['patch'] = self.pred_patch_fc(self.features[i], r, R, xyz_w, inparams)
 
-    def pred_patch_fc(self, f, r, R, xyz, inparams):
+    def pred_patch_fc(self, f, r, mat_r, xyz, inparams):
         uv_p = f['h']
         half_patch_wm = f['half_patch_size_wm']
 
@@ -298,7 +297,7 @@ class Map:
             Temp1[0:3, 0:3] = R_Wk_p_f
             Temp2[0:3, 3] = r_Wk_p_f
             H_Wk_p_f = np.dot(Temp1, Temp2)
-            Temp1[0:3, 0:3] = R
+            Temp1[0:3, 0:3] = mat_r
             Temp2[0:3, 3] = r
             H_Wk = np.dot(Temp1, Temp2)
             H_kpf_k = np.dot(H_Wk_p_f.T, H_Wk)

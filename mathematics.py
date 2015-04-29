@@ -110,7 +110,7 @@ def dqnorm_by_dq(q):
     M[3, 3] = dqi_by_dqi(q[3], qq)
     return  M
     
-def qprod(self, q, r):
+def qprod(q, r):
     t = np.zeros([4, 1], dtype=np.double)
     t[0] = (r[0] * q[0] - r[1] * q[1] - r[2] * q[2] - r[3] * q[3])
     t[1] = (r[0] * q[1] + r[1] * q[0] - r[2] * q[3] + r[3] * q[2])
