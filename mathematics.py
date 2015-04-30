@@ -15,6 +15,11 @@ import scipy
 import sys
 
 def QuaternionFromAngularVelocity(av):
+    """
+
+    :param av:
+    :return:
+    """
     angle = np.sqrt(np.sum(av ** 2))
 
     if (angle > 0.0):
@@ -26,6 +31,11 @@ def QuaternionFromAngularVelocity(av):
     return  q;
 
 def dq3_by_dq1(q):
+    """
+
+    :param q:
+    :return:
+    """
     m = np.identity(4, dtype=np.double) 
     # m[:,:] = [[q[0], -q[1], -q[2], -q[3]],
     #           [q[1],  q[0], -q[3],  q[2]], 
@@ -41,6 +51,11 @@ def dq3_by_dq1(q):
     return m
 
 def dq3_by_dq2(q):
+    """
+
+    :param q:
+    :return:
+    """
     m = np.identity(4, dtype=np.double) * q[0]
     m[1, 0] = m[2, 3] = q[1]
     m[0, 1] = m[3, 2] = -q[1]
@@ -51,19 +66,47 @@ def dq3_by_dq2(q):
     return m
 
 def dq0_by_domegaA(omegaA, omega, delta_t):
+    """
+
+    :param omegaA:
+    :param omega:
+    :param delta_t:
+    :return:
+    """
     return ((-delta_t / 2.0) * (omegaA / omega) * np.sin(omega * delta_t / 2.0))
 
 def dqA_by_domegaA(omegaA, omega, delta_t):
+    """
+
+    :param omegaA:
+    :param omega:
+    :param delta_t:
+    :return:
+    """
     return ((delta_t / 2.0) * (omegaA ** 2) / (omega ** 2) * \
             np.cos(omega * delta_t / 2.0) + (1.0 / omega) * (1.0 - (omegaA ** 2) / (omega ** 2)) * \
             np.sin(omega * delta_t / 2.0))
 
 def dqA_by_domegaB(omegaA, omegaB, omega, delta_t):
+    """
+
+    :param omegaA:
+    :param omegaB:
+    :param omega:
+    :param delta_t:
+    :return:
+    """
     return ((omegaA * omegaB / (omega ** 2)) * ((delta_t / 2.0) * \
             np.cos(omega * delta_t / 2.0) - \
             (1.0 / omega) * np.sin(omega * delta_t / 2.0)))
 
 def dq_omega_dt(omega, delta_t):
+    """
+
+    :param omega:
+    :param delta_t:
+    :return:
+    """
     omegamod = np.sqrt(np.sum(omega ** 2))
     dqomegadt_by_domega = np.zeros([4, 3], dtype=np.double)
 
@@ -83,12 +126,30 @@ def dq_omega_dt(omega, delta_t):
     return dqomegadt_by_domega
 
 def dqi_by_dqi(qi, qq):
+    """
+
+    :param qi:
+    :param qq:
+    :return:
+    """
     return (1 - (qi ** 2 / float(qq ** 2))) / qq
 
 def dqi_by_dqj(qi, qj, qq):
+    """
+
+    :param qi:
+    :param qj:
+    :param qq:
+    :return:
+    """
     return -qi * qj / float(qq ** 3)
 
 def dqnorm_by_dq(q):
+    """
+
+    :param q:
+    :return:
+    """
     M = np.zeros([4, 4], dtype=np.double)	
     qq = np.sum(q ** 2)
 
@@ -111,6 +172,12 @@ def dqnorm_by_dq(q):
     return  M
     
 def qprod(q, r):
+    """
+
+    :param q:
+    :param r:
+    :return:
+    """
     t = np.zeros([4, 1], dtype=np.double)
     t[0] = (r[0] * q[0] - r[1] * q[1] - r[2] * q[2] - r[3] * q[3])
     t[1] = (r[0] * q[1] + r[1] * q[0] - r[2] * q[3] + r[3] * q[2])
@@ -120,6 +187,11 @@ def qprod(q, r):
     return t    
             
 def q2r(q): # matrix representation of quaternion
+    """
+
+    :param q:
+    :return:
+    """
     R = np.zeros([3, 3], dtype=np.double)
     R[0, 0] = q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3]
     R[1, 1] = q[0] * q[0] - q[1] * q[1] + q[2] * q[2] - q[3] * q[3]
@@ -133,10 +205,26 @@ def q2r(q): # matrix representation of quaternion
     return R   
 
 def xyz_dh_dy(inparams, xv, y, zi):
+    """
+
+    :param inparams:
+    :param xv:
+    :param y:
+    :param zi:
+    :return:
+    """
     xyz_dhrl_dy = np.linalg.inv(q2r(xv))
     return np.dot(xyz_dh_dhrl(inparams,xv, y, zi),xyz_dhrl_dy)
 
 def xyz_dh_dhrl(inparams, xv, y, zi):
+    """
+
+    :param inparams:
+    :param xv:
+    :param y:
+    :param zi:
+    :return:
+    """
     Rrw = np.linalg.inv(q2r(xv))
     xyz_dhd_dhu = np.linalg.inv(jacob_undistort_fm(zi, inparams))
     
@@ -148,6 +236,14 @@ def xyz_dh_dhrl(inparams, xv, y, zi):
     return a
 
 def xyz_dh_dxv(inparams, xv, y, zi):
+    """
+
+    :param inparams:
+    :param xv:
+    :param y:
+    :param zi:
+    :return:
+    """
     
     xyz_dhrl_drw = -1 * np.linalg.inv(q2r(xv[3:6]))
     xyz_dh_drw = np.dot(xyz_dh_dhrl(inparams, xv, y, zi), xyz_dhrl_drw)
@@ -166,6 +262,14 @@ def xyz_dh_dxv(inparams, xv, y, zi):
 
 
 def id_dh_dy(inparams, xv, y, zi):
+    """
+
+    :param inparams:
+    :param xv:
+    :param y:
+    :param zi:
+    :return:
+    """
     id_dhrl_dy = np.linalg.inv(q2r(xv))
     return np.dot(id_dh_dhrl(inparams,xv, y, zi),id_dhrl_dy)
 
@@ -191,7 +295,7 @@ def jacob_undistort_fm(uv_d, inparams):
     
     return j_un
 
-def hinv(newFeature, uv_d, xv, inparams, initRho):
+def hinv(uv_d, xv, inparams, initRho):
     pass
 
 def dRq_times_a_by_dq(q, a):
@@ -210,9 +314,11 @@ def dR_by_dqz(q):
     pass
 
 def rotate_with_dist_fc_c2c1(uv_c1, R_c2c1, t_c2c1, n, d, inparams):
+    uv_c2 = np.zeros(3)
     return uv_c2
 
 def rotate_with_dist_fc_c1c2(uv_c2, R_c2c1, t_c2c1, n, d, inparams):
+    uv_c1 = np.zeros(3)
     return uv_c1
 
 
@@ -223,6 +329,11 @@ def m(phi, theta):
     
 def id2cartesian(yi):
     pass
+
+def std_dev(im, mean):
+
+    std = 0
+    return std
 
 class quaternion:
 

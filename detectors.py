@@ -20,4 +20,3 @@ def detect(detector, image):
     forb = cv2.FeatureDetector_create(detector)
     kpts = forb.detect(image)
     return kpts    
-

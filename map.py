@@ -20,6 +20,44 @@ class Map:
         self.features = []
         pass
 
+    @staticmethod
+    def new_feature(im, uv, x, step, xf, begin):
+        """
+
+        :param im:
+        :param uv:
+        :param x:
+        :param step:
+        :param xf:
+        :param begin:
+        :return:
+        """
+        feature = dict(measurement_size=2,
+                       size=6,
+                       times_predicted=0,
+                       times_measured=0,
+                       individually_compatible=0,
+                       low_innovation_inlier=0,
+                       high_innovation_inlier=0,
+                       position=x[0:3],
+                       rotation=x[3:7],
+                       init_frame=step,
+                       init_measurement=uv,
+                       uv_wi=uv,
+                       y=xf,
+                       half_size_wi=20,
+                       half_size_wm=6,
+                       patch_wm=np.zeros(im.shape, dtype=np.float32),
+                       patch_wi=im,
+                       R=np.identity(3, dtype=np.float32),
+                       type=2,
+                       h=None,
+                       z=None,
+                       H=None,
+                       S=None,
+                       begin=begin)
+        return feature
+
     def manage(self, x, cov, inparams, frame, step, min_num_of_features=10):
         """
 
@@ -107,6 +145,12 @@ class Map:
         pass
 
     def inverse_depth2xyz(self, x, cov):
+        """
+
+        :param x:
+        :param cov:
+        :return:
+        """
         lin_index_thresh = 0.1
         convert = 0
 
@@ -126,7 +170,8 @@ class Map:
                 x_c1 = x[begin:begin + 3]
                 x_c2 = x[0:3]
                 xyz = x_c2 + (1 / rho) * mi
-                temp = xyz - x_c2
+                temp = np.zeros(3, dtype=np.float32)
+                temp[:] = xyz - x_c2
                 temp2 = xyz - x_c1
                 d_c2p = np.linalg.norm(temp)
                 cos_alpha = (np.dot(temp.T, temp2) / (d_c2p * np.linalg.norm(temp2)))
@@ -142,18 +187,28 @@ class Map:
                     mat_j[3, :] = (1 / rho) * [np.cos(phi) * np.cos(theta), 0, -np.cos(phi) * np.sin(theta)]
                     mat_j[4, :] = (1 / rho) * [-np.sin(phi) * np.sin(theta), -np.cos(phi), -np.sin(phi) * np.cos(theta)]
                     mat_j[5, :] = mi / rho ** 2
-                    Jall = np.zeros([cov.shape[0], cov.shape[1] - 3], dtype=np.float32)
-                    Jall[0:begin, 0:begin] = np.identity(begin, dtype=np.float32)
-                    Jall[begin:begin + mat_j.shape[0], begin:begin + mat_j.shape[1]] = mat_j
+                    mat_j_all = np.zeros([cov.shape[0], cov.shape[1] - 3], dtype=np.float32)
+                    mat_j_all[0:begin, 0:begin] = np.identity(begin, dtype=np.float32)
+                    mat_j_all[begin:begin + mat_j.shape[0], begin:begin + mat_j.shape[1]] = mat_j
                     if x.shape[0] > begin + 6:
-                        Jall[begin + mat_j.shape[0]:, begin + mat_j.shape[1]] = np.identity(
-                            Jall[begin + mat_j.shape[0]:, begin + mat_j.shape[1]].shape[0], dtype=np.float32)
-                    P2 = np.dot(np.dot(Jall, cov), Jall.T)
+                        mat_j_all[begin + mat_j.shape[0]:, begin + mat_j.shape[1]] = np.identity(
+                            mat_j_all[begin + mat_j.shape[0]:, begin + mat_j.shape[1]].shape[0], dtype=np.float32)
+                    cov = np.dot(np.dot(mat_j_all, cov), mat_j_all.T)
                     convert = 1
 
         return x, cov
 
     def initialize_features(self, x, cov, inparams, frame, step, num_of_features):
+        """
+
+        :param x:
+        :param cov:
+        :param inparams:
+        :param frame:
+        :param step:
+        :param num_of_features:
+        :return:
+        """
         max_attempts = 50
         attempts = 0
         initialized = 0
@@ -166,69 +221,87 @@ class Map:
                 initialized += 1
         return x, cov
 
-    def initialize_feature(self, x, P, inparams, frame, step):
+    def initialize_feature(self, x, mat_p, inparams, frame, step):
+        """
+
+        :param x:
+        :param mat_p:
+        :param inparams:
+        :param frame:
+        :param step:
+        :return:
+        """
         half_patch_wi = 20
-        half_patch_wm = 6
         excluded_band = half_patch_wi + 1
-        max_init_attemprs = 1
-        init_box_size = [60, 40]
+        max_init_attempts = 1
         init_box_semisize = [30, 20]
         init_rho = 1
         std_rho = 1
-        std_pxl = inparams['sd']
-        rand_attemt = 1
-        not_empty_box = 1
         detected_new = 0
         # newFeature, newFeatureY
-        nF = np.ones(2, dtype=np.double)
+        n_f = np.ones(2, dtype=np.float32)
         self.predict_camera_measurements(inparams, x)
 
         for i in range(max_init_attempts):
             if detected_new == 1:
                 return 1
-            areThereCorners = 0
-            areThereFeatures = 0
-            regionCenter = np.random.random_sample(2)
-            regionCenter[0] = np.floor(regionCenter[0] * (
-                inparams['width'] - 2 * excluded_band - 2 * init_box_semisize[0] + 0.5) + excluded_band + init_box_semisize[
-                                           0])
-            regionCenter[1] = np.floor(regionCenter[1] * (
-                inparams['height'] - 2 * excluded_band - 2 * init_box_semisize[1] + 0.5) + excluded_band +
-                                       init_box_semisize[1])
+            are_there_corners = 0
+            are_there_features = 0
+            region_center = np.random.random_sample(2)
+
+            region_center[0] = np.floor(region_center[0] * (
+                inparams['width'] - 2 * excluded_band -
+                2 * init_box_semisize[0] + 0.5) + 
+                excluded_band + init_box_semisize[0])
+
+            region_center[1] = np.floor(region_center[1] * (
+                inparams['height'] - 2 * excluded_band -
+                2 * init_box_semisize[1] + 0.5) +
+                excluded_band + init_box_semisize[1])
+
             for j in range(len(self.features)):
-                if ((self.features[j]['h'] > regionCenter[0] - init_box_semisize[0]) and
-                        (self.features[j]['h'] < regionCenter[0] + init_box_semisize[0]) and
-                        (self.features[j]['h'] > regionCenter[1] - init_box_semisize[1]) and
-                        (self.features[j]['h'] < regionCenter[1] + init_box_semisize[1])):
-                    areThereFeatures = 1
+                if ((self.features[j]['h'] > region_center[0] - init_box_semisize[0]) and
+                        (self.features[j]['h'] < region_center[0] + init_box_semisize[0]) and
+                        (self.features[j]['h'] > region_center[1] - init_box_semisize[1]) and
+                        (self.features[j]['h'] < region_center[1] + init_box_semisize[1])):
+                    are_there_features = 1
                     break
-            if areThereFeatures == 1:
+            if are_there_features == 1:
                 continue
-            frame_part = frame[regionCenter[1] - init_box_semisize[1]:regionCenter[1] + init_box_semisize[1],
-                         regionCenter[0] - init_box_semisize[0]:regionCenter[0] + init_box_semisize[0]]
+            frame_part = (frame[region_center[1] - init_box_semisize[1]:
+                          region_center[1] + init_box_semisize[1],
+                          region_center[0] - init_box_semisize[0]:
+                          region_center[0] + init_box_semisize[0]])
 
             kp = detectors.detect("FAST", frame_part)
-            kp_mat = np.zeros([len(fp), 2], dtype=np.double)
-            for i in range(len(fp)):
-                (xp, yp) = kp[i].pt
-                fp_mat[i, :] = [xp, yp]
-            if len(fp) > 0:
-                temp = np.ones()
+            kp_mat = np.zeros([len(kp), 2], dtype=np.float32)
+            for j in range(len(kp)):
+                (xp, yp) = kp[j].pt
+                kp_mat[j, :] = [xp, yp]
+            if len(kp) > 0:
+                temp = np.ones(kp_mat.shape, dtype=np.float32)
                 temp[:, 0] *= (- init_box_semisize[0] + region_center[0] - 1)
                 temp[:, 1] *= (- init_box_semisize[1] + region_center[1] - 1)
-                fp_mat += temp
-                areThereCorners = 1
+                kp_mat += temp
+                are_there_corners = 1
 
-            if areThereCorners == 1:
-                nF = fp_mat[0, :].T
+            if are_there_corners == 1:
+                n_f = kp_mat[0, :].T
                 detected_new = 1
 
-            if nF[0] * nF[1] >= 0:
-                temp = nF
-                x, P = self.addFeaturesID(temp, x, P, inparams, init_rho, std_rho)
+            if n_f[0] * n_f[1] >= 0:
+                temp = n_f
+                x, mat_p, xf = self.add_features_id(temp, x, mat_p, inparams, init_rho, std_rho)
+                self.add_feature_info(n_f, frame, x, step, xf)
         pass
 
     def predict_camera_measurements(self, inparams, x):
+        """
+
+        :param inparams:
+        :param x:
+        :return:
+        """
         r = x[0:3]
         mat_r = mathematics.q2r(x[3:7])
         for i in range(len(self.features)):
@@ -243,17 +316,26 @@ class Map:
         pass
 
     # ID = inverse depth
-    def hi(self, yi, r, mat_r, inparams):
+    @staticmethod
+    def hi(yi, r, mat_r, inparams):
+        """
+
+        :param yi:
+        :param r:
+        :param mat_r:
+        :param inparams:
+        :return:
+        """
         if yi.shape[0] > 3:
             theta, phi, rho = yi[[3, 4, 5]]
             mv = mathematics.m
             hrl = np.dot(mat_r.T, (yi[0:3] - r)) * rho + mv
         else:
             hrl = np.dot(mat_r.T, (yi - r))
-        if ((math.atan2(hrl(0), hrl(2)) * 180 / math.pi < -60) or
-                (math.atan2(hrl(0), hrl(2)) * 180 / math.pi > 60) or
-                (math.atan2(hrl(1), hrl(2)) * 180 / math.pi < -60) or
-                (math.atan2(hrl(1), hrl(2)) * 180 / math.pi > 60)):
+        if ((math.atan2(hrl[0], hrl[2]) * 180 / math.pi < -60) or
+                (math.atan2(hrl[0], hrl[2]) * 180 / math.pi > 60) or
+                (math.atan2(hrl[1], hrl[2]) * 180 / math.pi < -60) or
+                (math.atan2(hrl[1], hrl[2]) * 180 / math.pi > 60)):
             return None
         yi2 = yi(2)
         if yi2 == 0:
@@ -271,9 +353,15 @@ class Map:
         else:
             return None
 
-    def predict_features_appearance(self, x, inparams):
+    def predict_features_appearance(self, inparams, x):
+        """
+
+        :param inparams:
+        :param x:
+        :return:
+        """
         r = x[0:3]
-        R = mathematics.q2r(x[3:7])
+        mat_r = mathematics.q2r(x[3:7])
         for i in range(len(self.features)):
             if self.features[i]['h'] is not None:
                 begin = self.features[i]['begin']
@@ -281,121 +369,167 @@ class Map:
                     xyz_w = x[begin:begin + 3]
                 else:
                     xyz_w = mathematics.id2cartesian(x[begin:begin + 6])
-                self.features[i]['patch'] = self.pred_patch_fc(self.features[i], r, R, xyz_w, inparams)
+                self.features[i]['patch'] = self.pred_patch_fc(self.features[i], r, mat_r, xyz_w, inparams)
 
-    def pred_patch_fc(self, f, r, mat_r, xyz, inparams):
+    @staticmethod
+    def pred_patch_fc(f, r, mat_r, xyz, inparams):
+        """
+
+        :param f:
+        :param r:
+        :param mat_r:
+        :param xyz:
+        :param inparams:
+        :return:
+        """
         uv_p = f['h']
-        half_patch_wm = f['half_patch_size_wm']
+        half_patch_wm = f['half_size_wm']
 
-        if ((uv_p[0] > half_patch_wm) and (uv_p[0] < inparams['width'] - half_patch_wm) and \
-                    (uv_p[1] > half_patch_wm) and (uv_p[1] < inparams['height'] - half_patch_wm)):
+        if ((uv_p[0] > half_patch_wm) and
+                (uv_p[0] < inparams['width'] - half_patch_wm) and
+                (uv_p[1] > half_patch_wm) and
+                (uv_p[1] < inparams['height'] - half_patch_wm)):
             uv_p_f = f['init_measurement']
-            R_Wk_p_f = f['rotation']
-            r_Wk_p_f = f['position']
-            Temp1 = np.zeros([4, 4], dtype=np.double)
-            Temp2 = np.zeros([4, 4], dtype=np.double)
-            Temp1[0:3, 0:3] = R_Wk_p_f
-            Temp2[0:3, 3] = r_Wk_p_f
-            H_Wk_p_f = np.dot(Temp1, Temp2)
-            Temp1[0:3, 0:3] = mat_r
-            Temp2[0:3, 3] = r
-            H_Wk = np.dot(Temp1, Temp2)
-            H_kpf_k = np.dot(H_Wk_p_f.T, H_Wk)
+            mat_r_wk_p_f = f['rotation']
+            vec_r_wk_p_f = f['position']
+            temp1 = np.zeros([4, 4], dtype=np.float32)
+            temp2 = np.zeros([4, 4], dtype=np.float32)
+            temp1[0:3, 0:3] = mat_r_wk_p_f
+            temp2[0:3, 3] = vec_r_wk_p_f
+            mat_h_wk_p_f = np.dot(temp1, temp2)
+            temp1[0:3, 0:3] = mat_r
+            temp2[0:3, 3] = r
+            mat_h_wk = np.dot(temp1, temp2)
+            mat_h_kpf_k = np.dot(mat_h_wk_p_f.T, mat_h_wk)
             patch_p_f = f['patch_wi']
-            half_patch_wi = f['half_patch_size_wi']
-            n1 = np.zeros(3, dtype=np.double)
-            n2 = np.zeros(3, dtype=np.double)
+            half_patch_wi = f['half_size_wi']
+            n1 = np.zeros(3, dtype=np.float32)
+            n2 = np.zeros(3, dtype=np.float32)
             n1[:] = [uv_p_f[0] - inparams['u0'], uv_p_f[1] - inparams['v0'], - inparams['fku']]
-            nv[:] = [uv_p[0] - inparams['u0'], uv_p[1] - inparams['v0'], - inparams['fku']]
-            Temp = np.zeros(4, dtype=np.double)
-            Temp[0:3] = n2, Temp[3] = 1
-            Temp = np.dot(H_kpf_k, Temp)
-            Temp = Temp / Temp[3]
-            n2 = Temp[0:3]
+            n2[:] = [uv_p[0] - inparams['u0'], uv_p[1] - inparams['v0'], - inparams['fku']]
+            temp = np.zeros(4, dtype=np.float32)
+            temp[0:3] = n2
+            temp[3] = 1
+            temp = np.dot(mat_h_kpf_k, temp)
+            temp = temp / temp[3]
+            n2 = temp[0:3]
             n1 = n1 / np.linalg.norm(n1)
             n2 = n2 / np.linalg.norm(n2)
             n = n1 + n2
             n = n / np.linalg.norm(n)
-            Temp[0:3] = XYZ_w, Temp[3] = 1
-            XYZ_kpf = np.dot(np.linalg.inv(H_Wk_p_f), Temp)
-            XYZ_kpf = XYZ_kpf / XYZ_kpf[3]
-            d = n[0] * XYZ_kpf[0] - n[1] * XYZ_kpf[1] - n[2] * XYZ_kpf[2]
-            H3x3 = H_kpf_k[0:3, 0:3]
-            H3x1 = H_kpf_k[0:3, 3]
-            uv_p_pred_patch = mathematics.rotate_with_dist_fc_c2c1(uv_p_f, H3x3, H3x1, n, d, inparams);
-            uv_c2 = np.zeros(2, dtype=np.double)
+            temp[0:3] = xyz
+            temp[3] = 1
+            xyz_kpf = np.dot(np.linalg.inv(mat_h_wk_p_f), temp)
+            xyz_kpf = xyz_kpf / xyz_kpf[3]
+            d = n[0] * xyz_kpf[0] - n[1] * xyz_kpf[1] - n[2] * xyz_kpf[2]
+            h3x3 = mat_h_kpf_k[0:3, 0:3]
+            h3x1 = mat_h_kpf_k[0:3, 3]
+            uv_p_pred_patch = mathematics.rotate_with_dist_fc_c2c1(uv_p_f, h3x3, h3x1, n, d, inparams)
             uv_c1 = uv_p_pred_patch - half_patch_wm
-            uv_c2 = mathematics.rotate_with_dist_fc_c1c2(uv_c1, H3x3, H3x1, n, d, inparams);
-            uv_c2 = np.floor((uv_c2 - uv_p_f) - half_patch_wi - 1) - 1
+            uv_c2 = mathematics.rotate_with_dist_fc_c1c2(uv_c1, h3x3, h3x1, n, d, inparams)
+            uv_c2[:] = np.floor(uv_c2 - uv_p_f - half_patch_wi - 1) - 1
             uv_c2[0] = max(uv_c2[0], 0)
             uv_c2[1] = max(uv_c2[1], 0)
-            if (uv_c2[0] >= patch_p_f.shape[1] - 2 * half_patch_wm):
+            if uv_c2[0] >= patch_p_f.shape[1] - 2 * half_patch_wm:
                 uv_c2[0] -= (2 * half_patch_wm + 2)
-            if (uv_c2[1] >= patch_p_f.shape[0] - 2 * half_patch_wm):
+            if uv_c2[1] >= patch_p_f.shape[0] - 2 * half_patch_wm:
                 uv_c2[1] -= (2 * half_patch_wm + 2)
             patch = patch_p_f[uv_c2[1], uv_c2[0], 2 * half_patch_wm - 1, 2 * half_patch_wm - 1]
         else:
             patch = None
         return patch
 
-    def addFeaturesID(self, uvd, x, P, inparams, init_rho, std_rho):
+    def add_features_id(self, uvd, x, mat_p, inparams, init_rho, std_rho):
+        """
+
+        :param uvd:
+        :param x:
+        :param mat_p:
+        :param inparams:
+        :param init_rho:
+        :param std_rho:
+        :return:
+        """
         xv = x[0:13]
         xf = mathematics.hinv(uvd, xv, inparams, init_rho)
         x = np.concatenate(x, xf)
-        P = self.addFeatureCovarianceID(uvd, x, P, inparams, init_rho, std_rho)
-        return x, P
+        mat_p = self.add_feature_covariance_id(uvd, x, mat_p, inparams, std_rho)
+        return x, mat_p, xf
 
-    def addFeatureCovarianceID(self, uvd, x, P, inparams, init_rho, std_rho):
-        R = mathematics.q2r(x[3:7])
+    @staticmethod
+    def add_feature_covariance_id(uvd, x, mat_p, inparams, std_rho):
+        """
+
+        :param uvd:
+        :param x:
+        :param mat_p:
+        :param inparams:
+        :param std_rho:
+        :return:
+        """
+        mat_r = mathematics.q2r(x[3:7])
         uv_u = mathematics.undistort_fm(uvd, inparams)
-        XYZ_c = np.zeros(3, np.double)
-        x_c = (-(inparams['u0'] - uv_u[0]) / inaparams['fku'])
-        y_c = (-(inparams['v0'] - uv_u[1]) / inaparams['fkv'])
-        XYZ_c[:] = [x_c, y_c, 1]
-        XYZ_w = np.dot(R, XYZ_c)
-        dtheta_dgw = np.zeros(3, np.double)
-        dtheta_dgw[:] = [(XYZ_w[0] / (XYZ_w[0] ** 2 + XYZ_w[2] ** 2)), 0, (-XYZ_w[0] / (XYZ_w[0] ** 2 + XYZ_w[2] ** 2))]
-        dphi_dgw = np.zeros(3, np.double)
-        dphi_dgw[:] = [(XYZ_w[0] * XYZ_w[1]) / ((np.sum(XYZ_w ** 2)) * np.sqrt(XYZ_w[0] ** 2 + XYZ_w[2] ** 2)),
-                       -np.sqrt(XYZ_w[0] ** 2 + XYZ_w[2] ** 2) / (np.sum(XYZ_w ** 2)),
-                       (XYZ_w[2] * XYZ_w[1]) / ((np.sum(XYZ_w ** 2)) * np.sqrt(XYZ_w[0] ** 2 + XYZ_w[2] ** 2))]
-        dgw_dqwr = mathematics.dRq_times_a_by_dq(q, XYZ_c)
+        xyz_c = np.zeros(3, np.float32)
+        x_c = (-(inparams['u0'] - uv_u[0]) / inparams['fku'])
+        y_c = (-(inparams['v0'] - uv_u[1]) / inparams['fkv'])
+        xyz_c[:] = [x_c, y_c, 1]
+        xyz_w = np.dot(mat_r, xyz_c)
+        dtheta_dgw = np.zeros(3, np.float32)
+        dtheta_dgw[:] = [(xyz_w[0] / (xyz_w[0] ** 2 + xyz_w[2] ** 2)), 0, (-xyz_w[0] / (xyz_w[0] ** 2 + xyz_w[2] ** 2))]
+        dphi_dgw = np.zeros(3, np.float32)
+        dphi_dgw[:] = [(xyz_w[0] * xyz_w[1]) / ((np.sum(xyz_w ** 2)) * np.sqrt(xyz_w[0] ** 2 + xyz_w[2] ** 2)),
+                       -np.sqrt(xyz_w[0] ** 2 + xyz_w[2] ** 2) / (np.sum(xyz_w ** 2)),
+                       (xyz_w[2] * xyz_w[1]) / ((np.sum(xyz_w ** 2)) * np.sqrt(xyz_w[0] ** 2 + xyz_w[2] ** 2))]
+        dgw_dqwr = mathematics.dRq_times_a_by_dq(x[3:7], xyz_c)
         dtheta_dqwr = np.dot(dtheta_dgw.T, dgw_dqwr)
         dphi_dqwr = np.dot(dphi_dgw.T, dgw_dqwr)
-        dy_dqwr = np.zeros([6, 4], dtype=np.double)
+        dy_dqwr = np.zeros([6, 4], dtype=np.float32)
         dy_dqwr[3, 0:4] = dtheta_dqwr.T
         dy_dqwr[4, 0:4] = dphi_dqwr.T
-        dy_drw = np.zeros([6, 3], dtype=np.double)
-        dy_drw[0:3, 0:3] = np.identity(3, dtype=np.double)
-        dy_dxv = np.zeros([6, 13], dtype=np.double)
+        dy_drw = np.zeros([6, 3], dtype=np.float32)
+        dy_drw[0:3, 0:3] = np.identity(3, dtype=np.float32)
+        dy_dxv = np.zeros([6, 13], dtype=np.float32)
         dy_dxv[0:6, 0:3] = dy_drw
         dy_dxv[0:6, 4:8] = dy_drw
-        dyprima_dgw = np.zeros([5, 3], dtype=np.double)
+        dyprima_dgw = np.zeros([5, 3], dtype=np.float32)
         dyprima_dgw[3, 0:3] = dtheta_dgw.T
         dyprima_dgw[4, 0:3] = dphi_dgw.T
-        dgw_dgc = R
-        dgc_dhu = np.zeros([3, 2], dtype=np.double)
-        dgc_dhu[:] = [[1 / inparams['fku'], 0, 0][1 / inparams['fkv'], 0, 0]]
-        dhu_dhd = mathematics.jacob_undistord_fm(uv, inparams)
+        dgw_dgc = mat_r
+        dgc_dhu = np.zeros([3, 2], dtype=np.float32)
+        dgc_dhu[:] = [[1 / inparams['fku'], 0, 0], [1 / inparams['fkv'], 0, 0]]
+        dhu_dhd = mathematics.jacob_undistort_fm(uvd, inparams)
         dyprima_dhd = np.dot(np.dot(np.dot(dyprima_dgw, dgw_dgc), dgc_dhu), dhu_dhd)
-        dy_dhd = np.zeros([6, 3], dtype=np.double)
+        dy_dhd = np.zeros([6, 3], dtype=np.float32)
         dy_dhd[0:5, 0:2] = dyprima_dhd
         dy_dhd[5, 2] = 1
-        Padd = np.zeros([3, 3], dtype=np.double)
-        Padd[0:2, 0:2] = np.identity(2, dtype=np.double) * inparams['sd'] ** 2
-        Padd[2, 2] = std_rho
-        P2 = np.zeros([P.shape[0] + 6, P.shape[1] + 6], dtype=np.double)
-        P2[0:P.shape[0], 0:P.shape[1]] = P
-        P2[P.shape[0]:P.shape[0] + 6, 0:13] = np.dot(dy_dxv, P[0:13, 0:13])
-        P2[0:13, P.shape[1]:P.shape[1] + 6] = np.dot(P[0:13, 0:13], dy_dxv.T)
-        if (P.shape[0] > 13):
-            P2[P.shape[0]:P.shape[0] + 6, 13:P.shape[1] - 13] = np.dot(dy_dxv, P[0:13, 13:])
-            P2[13:P.shape[0] - 13, P.shape[1]:P.shape[1] + 6] = np.dot(P[13:, 0:13], dy_dxv.T)
-        P2[P.shape[0]:P.shape[0] + 6, P.shape[1]:P.shape[1] + 6] = np.dot(np.dot(dy_dxv, P[0:13, 0:13]), dy_dxv.T) + \
-                                                                   np.dot(np.dot(dy_dhd, Padd), dy_dhd.T)
-        return P2
+        padd = np.zeros([3, 3], dtype=np.float32)
+        padd[0:2, 0:2] = np.identity(2, dtype=np.float32) * inparams['sd'] ** 2
+        padd[2, 2] = std_rho
+        mat_p2 = np.zeros([mat_p.shape[0] + 6, mat_p.shape[1] + 6], dtype=np.float32)
+        mat_p2[0:mat_p.shape[0], 0:mat_p.shape[1]] = mat_p
+        mat_p2[mat_p.shape[0]:mat_p.shape[0] + 6, 0:13] = np.dot(dy_dxv, mat_p[0:13, 0:13])
+        mat_p2[0:13, mat_p.shape[1]:mat_p.shape[1] + 6] = np.dot(mat_p[0:13, 0:13], dy_dxv.T)
 
-    def addFeatureInfo(self, uv, im, x_res, step, nF):
+        shp0 = mat_p.shape[0]
+        shp1 = mat_p.shape[1]
+        if mat_p.shape[0] > 13:
+            mat_p2[shp0:shp0 + 6, 13:shp1 - 13] = np.dot(dy_dxv, mat_p[0:13, 13:])
+            mat_p2[13:shp0 - 13, shp1:shp1 + 6] = np.dot(mat_p[13:, 0:13], dy_dxv.T)
+            mat_p2[shp0:shp0 + 6, shp1:shp1 + 6] = (
+                np.dot(np.dot(dy_dxv, mat_p[0:13, 0:13]), dy_dxv.T) +
+                np.dot(np.dot(dy_dhd, padd), dy_dhd.T))
+        return mat_p2
+
+    def add_feature_info(self, uv, im, x_res, step, xf):
+        """
+
+        :param uv:
+        :param im:
+        :param x_res:
+        :param step:
+        :param xf:
+        :return:
+        """
         half_size_wi = 20
         x1 = min(max(uv[0] - half_size_wi, 0), im.shape[1])
         x2 = min(max(uv[0] - half_size_wi + 41, 0), im.shape[1])
@@ -403,54 +537,58 @@ class Map:
         y2 = min(max(uv[1] - half_size_wi + 41, 0), im.shape[0])
         im_patch = im[y1:y2, x1:x2]
         begin = 0
-        if (len(self.features) != 0):
+        if len(self.features) != 0:
             begin = self.features[-1]['begin'] + self.features[-1]['type'] * 3
-        self.features.append(self.newFeature(im_patch, uv, x_res, step, nF, begin))
+        self.features.append(self.new_feature(im_patch, uv, x_res, step, xf, begin))
 
-    def generateStatePattern(self, pattern, zID, zXYZ, x):
+    def calculate_derivatives(self, inparams, x):
+        """
 
-        pass
-
-    def set_as_most_supported_hypothesis(self, pos_li_inliers_ID, pos_li_inliers_XYZ):
-        jID = 0
-        jXYZ = 0
-
+        :param inparams:
+        :param x:
+        :return:
+        """
         for i in range(len(self.features)):
-            self.features[i]['low_innovation_inlier'] = 0;
-            if self.features[i]['z'] != None:
-                if self.features[i]['type'] == 1:
-                    if pos_li_inliers_XYZ[jXYZ] == 1:
-                        self.features[i]['low_innovation_inlier'] = 1;
-                        jXYZ += 1
-                else:
-                    if pos_li_inliers_XYZ[jID] == 1:
-                        self.features[i]['low_innovation_inlier']
-                        jID += 1
-
-    def calculateDerivatives(self, x, inparams):
-        for i in range(len(self.features)):
-            if self.features[i]['h'] != None:
+            if self.features[i]['h'] is not None:
                 begin = self.features[i]['begin']
                 f = self.features[i]
                 if f['type'] == 1:
                     y = x[begin:begin + 3]
-                    self.features[i]['H'] = self.H_XYZ(x[0:13], y, inparams, x.shape[0], f['begin'])
+                    self.features[i]['H'] = self.mat_h_xyz(x[0:13], y, inparams, f, x.shape[0])
                 else:
                     y = x[begin:begin + 6]
-                    self.features[i]['H'] = self.H_ID(x[0:13], y, inparams, x.shape[0], f['begin'])
+                    self.features[i]['H'] = self.mat_h_id(x[0:13], y, inparams, f, x.shape[0])
 
-    def H_XYZ(self, xv, y, inparams, sizeX, begin):
-        zi = f['h']
-        num_of_features = len(self.features)
-        Hi = np.zeros([2, sizeX], dtype=np.double)
-        Hi[:, 0:13] = xyz_dh_dxv(inparams, xv, y, zi)
-        Hi[:, begin:begin + 3] = xyz_dh_dx(inparams, xv, y, zi)
-        return Hi
+    @staticmethod
+    def mat_h_xyz(xv, y, inparams, f, size_x):
+        """
 
-    def H_ID(self, xv, y, inparams, f):
+        :param xv:
+        :param y:
+        :param inparams:
+        :param f:
+        :param size_x:
+        :return:
+        """
         zi = f['h']
-        num_of_features = len(self.features)
-        Hi = np.zeros([2, sizeX], dtype=np.double)
-        Hi[:, 0:13] = id_dh_dxv(inparams, xv, y, zi)
-        Hi[:, begin:begin + 6] = id_dh_dx(inparams, xv, y, zi)
-        return Hi   
+        mat_h = np.zeros([2, size_x], dtype=np.float32)
+        mat_h[:, 0:13] = mathematics.xyz_dh_dxv(inparams, xv, y, zi)
+        mat_h[:, f['begin']:f['begin'] + 3] = mathematics.xyz_dh_dy(inparams, xv, y, zi)
+        return mat_h
+
+    @staticmethod
+    def mat_h_id(xv, y, inparams, f, size_x):
+        """
+
+        :param xv:
+        :param y:
+        :param inparams:
+        :param f:
+        :param size_x:
+        :return:
+        """
+        zi = f['h']
+        mat_h = np.zeros([2, size_x], dtype=np.float32)
+        mat_h[:, 0:13] = mathematics.id_dh_dxv(inparams, xv, y, zi)
+        mat_h[:, f['begin']:f['begin'] + 6] = mathematics.id_dh_dy(inparams, xv, y, zi)
+        return mat_h

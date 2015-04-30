@@ -9,38 +9,267 @@ RANSAC
 
 # importy
 import numpy as np
+import map
+import mathematics
 
-# trida rozsireneho kalmanova filtru
-class ransac:
 
+class Ransac:
     # konstruktor
-    def __init__(self): 
+    def __init__(self):
         pass
-		
-    def hypotheses(self, x_p, P_p, features, inparams):
+
+    def hypotheses(self, x_p, mat_p_p, features, inparams):
+        """
+
+        :param x_p:
+        :param mat_p_p:
+        :param features:
+        :param inparams:
+        :return:
+        """
+        p_at_least_one_spurious_free = 0.99
+        thresh = inparams['image_noise']
+        n_hyp = 1000
+        max_hypothesis_support = 0
+        pattern, z_id, z_xyz = self.generate_state_pattern(x_p, features)
+        n = 0
+        while n < n_hyp:
+            position, zi, num_ic_matches = self.select_random_match(features)
+            hi = features[position]['h']
+            mat_hi = features[position]['h']
+            mat_s = np.dot(np.dot(mat_hi, mat_p_p), mat_hi.T) + features[position]['R']
+            mat_k = np.dot(np.dot(mat_p_p, mat_hi.T), np.linalg.inv(mat_s))
+            xi = x_p + np.dot(mat_k, (zi-hi))
+            hyp_support, pos_id, pos_xyz = (
+                self.compute_hypothesis_support_fast(
+                    xi, inparams, pattern, features, thresh))
+            if hyp_support > max_hypothesis_support:
+                max_hypothesis_support = hyp_support
+                features = self.set_as_most_supported_hypothesis(pos_id, pos_xyz, features)
+                epsilon = 1-(hyp_support/float(num_ic_matches))
+                n_hyp = np.ceil(np.log(1-p_at_least_one_spurious_free) / np.log(1 - (1-epsilon)))
+            n += 1
+        return features
+
+    @staticmethod
+    def generate_state_pattern(x, features):
+        """
+
+        :param x:
+        :param features:
+        :return:
+        """
+        pattern = np.zeros([x.shape[0], 4], dtype=np.float32)
+
+        for f in features:
+            if f['z'] is not None:
+                if f['type'] == 1:
+                    pattern[f['begin']:f['begin'] + 3, 3] = 1
+                else:
+                    pattern[f['begin']:f['begin'] + 3, 0] = 1
+                    pattern[f['begin'] + 3:f['begin'] + 5, 1] = 1
+
+        return pattern
+
+    @staticmethod
+    def matching(frame, map_obj, inparams):
+        """
+
+        :param frame:
+        :param map_obj:
+        :param inparams:
+        :return:
+        """
+        corr_thresh = 0.7
+        chi_095_2 = 5.9915
+        max_corr = 0
+
+        for i in range(len(map_obj.features)):
+            if map_obj.features[i]['h'] is not None:
+                mat_s = map_obj.features[i]['S']
+                if np.all(np.linalg.eig(mat_s) < 100):
+                    inv_s = np.linalg.inv(mat_s)
+                    patch = map_obj.features[i]['patch_wm']
+                    half_size_x = np.ceil(2*np.sqrt(mat_s[0, 0]))
+                    half_size_y = np.ceil(2*np.sqrt(mat_s[1, 1]))
+                    h = map_obj.features[i]['h']
+                    size_wm = map_obj.features[i]['half_size_wm']
+                    candidate = np.ndarray([0, 0], dtype=np.float32)
+                    for x in range(h[0] - half_size_x,
+                                   h[0] - half_size_x):
+                        for y in range(h[1] - half_size_y,
+                                       h[1] - half_size_y):
+                            nu = np.zeros(2, dtype=np.float32)
+                            nu[:] = [x-h[0], y-h[1]]
+                            if np.dot(np.dot(nu.T, inv_s), nu) < chi_095_2:
+                                if ((x > size_wm) and
+                                        (x < inparams['width'] - size_wm) and
+                                        (y > size_wm) and
+                                        (y < inparams['width'] - size_wm)):
+                                    y1 = y-size_wm
+                                    x1 = x-size_wm
+                                    im2 = frame[y1:y1 + patch.shape[0],
+                                                x1:x1 + patch.shape[1]]
+                                    m_im1 = np.mean(patch)
+                                    m_im2 = np.mean(im2)
+                                    temp = patch - m_im1
+                                    temp2 = im2 - m_im2
+                                    temp = temp * temp2
+                                    sd1 = mathematics.std_dev(patch, m_im1)
+                                    sd2 = mathematics.std_dev(im2, m_im2)
+                                    if sd1*sd2 != 0:
+                                        corr = np.sum(temp)/(sd1*sd2)
+                                        if corr > max_corr:
+                                            max_corr = corr
+                                            candidate = np.ndarray([x, y])
+                    if max_corr > corr_thresh:
+                        map_obj.features[i]['individually_compatible'] = 1
+                        candidate = candidate.astype(dtype=np.float32)
+                        map_obj.features[i]['z'] = candidate
+        return map_obj
+
+    @staticmethod
+    def select_random_match(features):
+        """
+
+        :param features:
+        :return:
+        """
+        position = 0
+        if len(features):
+            return 0
+        ind_compatible = 0
+        for i, f in enumerate(features):
+            if f['individually_compatible'] == 1:
+                ind_compatible += 1
+
+        while True:
+            position = np.random.randint(0, len(features))
+            if features[position]['individually_compatible'] == 1:
+                break
+
+        zi = features[position]['z']
+
+        return position, zi, ind_compatible
+
+    @staticmethod
+    def set_as_most_supported_hypothesis(pos_id, pos_xyz, features):
+        """
+
+        :param pos_id:
+        :param pos_xyz:
+        :param features:
+        :return:
+        """
+        jid = 0
+        jxyz = 0
+
+        for i in range(len(features)):
+            features[i]['low_innovation_inlier'] = 0
+            if features[i]['z'] is not None:
+                if features[i]['type'] == 1:
+                    if pos_xyz[jxyz] == 1:
+                        features[i]['low_innovation_inlier'] = 1
+                        jxyz += 1
+                else:
+                    if pos_id[jid] == 1:
+                        features[i]['low_innovation_inlier'] = 1
+                        jid += 1
+        return features
+
+    def search_ic_matches(self, x_p, mat_p_p, map_obj, inparams, frame):
+        """
+
+        :param x_p:
+        :param mat_p_p:
+        :param map_obj:
+        :param inparams:
+        :param frame:
+        :return:
+        """
+        map_obj.predict_camera_measurements(inparams, x_p)
+        map_obj.calculate_derivatives(inparams, x_p)
+        for i in range(len(map_obj.features)):
+            if map_obj.features[i]['h'] is not None:
+                map_obj.features[i]['S'] = (
+                    np.dot(
+                        np.dot(
+                            map_obj.features[i]['H'],
+                            mat_p_p),
+                        map_obj.features[i]['H'].T
+                    )
+                    + map_obj.features[i]['R']
+                )
+        map_obj.predict_features_appearance(inparams, x_p)
+        map_obj = self.matching(frame, map, inparams)
+        return map_obj
+
+    @staticmethod
+    def count_matches_under_a_threshold(features):
+        """
+
+        :param features:
+        :return:
+        """
+        hyp_support = 0
+        thresh = 0.5
+        for i, f in enumerate(features):
+            if f['z'] is not None:
+                nu = f['z'] - f['h']
+                temp = np.sqrt(np.sum(nu**2))
+                if temp < thresh:
+                    hyp_support += 1
+        return hyp_support
+
+    @staticmethod
+    def compute_hypothesis_support_fast(x, inparams, pattern,
+                                        features, thresh):
+        """
+
+        :param x:
+        :param inparams:
+        :param pattern:
+        :param features:
+        :param thresh:
+        :return:
+        """
+        hyp_support = 0
+        pos_id = np.zeros(pattern.shape[0], dtype=np.float32)
+        pos_xyz = np.zeros(pattern.shape[0], dtype=np.float32)
+
+        for i, f in enumerate(features):
+            if f['type'] == 1:
+                mat_r = mathematics.q2r(x[3:7])
+                ri_minus_rwc = x[f['begin']:f['begin'] + 3] - x[0:3]
+                hc = np.dot(mat_r.T, ri_minus_rwc).astype(dtype=np.float32)
+                h_norm = np.zeros(2, dtype=np.float32)
+            else:
+                mat_r = mathematics.q2r(x[3:7])
+                ri_minus_rwc = x[f['begin']:f['begin'] + 3] - x[0:3]
+                ri_minus_rwc_by_rhoi = ri_minus_rwc*x[f['begin']+5]
+                mi = mathematics.m(f['begin']+3, f['begin']+4)
+                hc = np.dot(mat_r.T, (ri_minus_rwc_by_rhoi + mi))
+            h_norm[:] = [hc[0]/hc[2], hc[1]/hc[2]]
+            h_image = np.zeros(2, dtype=np.float32)
+            h_image[0] = h_norm[0]+inparams['fku'] + inparams['u0']
+            h_image[1] = h_norm[1]+inparams['fkv'] + inparams['v0']
+            h_image = mathematics.distort_fm(h_image, inparams)
+            nu = f['z'] - h_image
+            residual = np.linalg.norm(nu)
+            if f['type'] == 1:
+                pos_xyz[f['begin']] = np.float32(residual > thresh)
+                hyp_support += pos_xyz[f['begin']]
+            else:
+                pos_id[f['begin']] = np.float32(residual > thresh)
+                hyp_support += pos_id[f['begin']]
+
+        return hyp_support, pos_id, pos_xyz
+
+    def rescue_hi_inliers(self, features, map_obj, inparams):
         pass
-    
-    def matching(self, frame, features, inparams):
-        pass
-    
-    def select_random_match(self, zi, features, numICMatches):
-        pass
-    
-    def search_IC_matches(self, x_p, P_p, map, inparams, frame): 
-        pass
-    
-    def count_matches_under_a_threshold(self, features):
-        pass
-    
-    def compute_hypothesis_support_fast(pos_id, pos_XYZ, x, inparams, state_vector_pattern, zID, zXYZ, features, thresh):
-        pass
-    
-    def rescue_hi_inliers(self, features, map, inparams):
-        pass
-    
-    def update_hi_inliers(self, features): 
+
+    def update_hi_inliers(self, features):
         pass
 
     def update_li_inliers(self, features):
         pass    
-        
