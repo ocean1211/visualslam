@@ -86,7 +86,7 @@ class Ekf:
         q = self.x[3:7]
         v = self.x[7, 10]
         omega = self.x[10:13]
-        qwt = mathematics.QuaternionFromAngularVelocity(omega * self.dtime)
+        qwt = mathematics.quaternion_from_angular_velocity(omega * self.dtime)
         self.x_p[0:3] = r + v * self.dtime
         self.x_p[3:7] = q * mathematics.qprod(q, qwt)
 
@@ -98,7 +98,7 @@ class Ekf:
         jacobian_fv_xv = np.identity(13, dtype=np.float32)
         temp3x3a = np.identity(13, dtype=np.float32) * self.dtime
         jacobian_fv_xv[0:3, 7:10] = temp3x3a
-        qwt = mathematics.QuaternionFromAngularVelocity(self.x[10:13] * self.dtime)
+        qwt = mathematics.quaternion_from_angular_velocity(self.x[10:13] * self.dtime)
         jacobian_fv_xv[3:7, 3:7] = mathematics.dq3_by_dq2(qwt)
         temp4x4 = mathematics.dq3_by_dq1(self.x[3:7])
         temp4x3 = mathematics.dq_omega_dt(self.x[10:13], self.dtime)

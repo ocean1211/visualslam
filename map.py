@@ -15,6 +15,10 @@ import numpy as np
 
 
 class Map:
+    """
+        Map class
+    """
+
     # constructor
     def __init__(self):
         self.features = []
@@ -480,7 +484,7 @@ class Map:
         dphi_dgw[:] = [(xyz_w[0] * xyz_w[1]) / ((np.sum(xyz_w ** 2)) * np.sqrt(xyz_w[0] ** 2 + xyz_w[2] ** 2)),
                        -np.sqrt(xyz_w[0] ** 2 + xyz_w[2] ** 2) / (np.sum(xyz_w ** 2)),
                        (xyz_w[2] * xyz_w[1]) / ((np.sum(xyz_w ** 2)) * np.sqrt(xyz_w[0] ** 2 + xyz_w[2] ** 2))]
-        dgw_dqwr = mathematics.dRq_times_a_by_dq(x[3:7], xyz_c)
+        dgw_dqwr = mathematics.d_r_q_times_a_by_dq(x[3:7], xyz_c)
         dtheta_dqwr = np.dot(dtheta_dgw.T, dgw_dqwr)
         dphi_dqwr = np.dot(dphi_dgw.T, dgw_dqwr)
         dy_dqwr = np.zeros([6, 4], dtype=np.float32)
@@ -592,3 +596,71 @@ class Map:
         mat_h[:, 0:13] = mathematics.id_dh_dxv(inparams, xv, y, zi)
         mat_h[:, f['begin']:f['begin'] + 6] = mathematics.id_dh_dy(inparams, xv, y, zi)
         return mat_h
+
+    def rescue_hi_inliers(self, x, mat_p, map_obj, inparams):
+        """
+
+        :param x:
+        :param mat_p:
+        :param map_obj:
+        :param inparams:
+        :return:
+        """
+        chi2inv_2_95 = 5.9915
+        map_obj.predictCameraMeasurements(inparams, x)
+        map_obj.calculate_derivatives(x, inparams)
+        for i in range(len(self.features)):
+            f = map_obj.features[i]
+            nui = f['z'] - f['h']
+            si = np.dot(np.dot(f['H'], mat_p), f['H'].T)
+            temp = np.dot(np.dot(nui.T, np.linalg.inv(si)), nui)
+
+            if temp < chi2inv_2_95:
+                self.features[i]['high_innovation_inlier'] = 1
+        pass
+
+    def update_hi_inliers(self, ekf_filter):
+        """
+
+        :param ekf_filter:
+        :return:
+        """
+        z = None
+        h = None
+        mat_h = None
+        for i, f in enumerate(self.features):
+            if self.features[i]['high_innovation_inlier'] == 1:
+                if z is not None:
+                    z = f['z']
+                    h = f['h']
+                    mat_h = f['H']
+                else:
+                    z = np.concatenate([z, f['z']])
+                    h = np.concatenate([h, f['h']])
+                    mat_h = np.concatenate([mat_h, f['H']])
+        mat_r = np.identity(mat_h.shape[0])
+        ekf_filter.update(mat_h, mat_r, z, h)
+        pass
+
+    def update_li_inliers(self, ekf_filter):
+        """
+
+        :param ekf_filter:
+        :return:
+        """
+        z = None
+        h = None
+        mat_h = None
+        for i, f in enumerate(self.features):
+            if self.features[i]['high_innovation_inlier'] == 1:
+                if z is not None:
+                    z = f['z']
+                    h = f['h']
+                    mat_h = f['H']
+                else:
+                    z = np.concatenate([z, f['z']])
+                    h = np.concatenate([h, f['h']])
+                    mat_h = np.concatenate([mat_h, f['H']])
+        mat_r = np.identity(mat_h.shape[0])
+        ekf_filter.update(mat_h, mat_r, z, h)
+        pass

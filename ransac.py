@@ -264,12 +264,3 @@ class Ransac:
                 hyp_support += pos_id[f['begin']]
 
         return hyp_support, pos_id, pos_xyz
-
-    def rescue_hi_inliers(self, features, map_obj, inparams):
-        pass
-
-    def update_hi_inliers(self, features):
-        pass
-
-    def update_li_inliers(self, features):
-        pass    
