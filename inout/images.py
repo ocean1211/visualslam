@@ -7,24 +7,26 @@
 __author__ = "neduchal"
 __date__ = "$23.3.2015 9:43:52$"
 
-import numpy as np
 import cv2
-import directories
+import glob
 
 
 class ImageDirectory:
 
     def __init__(self, path):
-        self.dir = directories.directory(path)
-                              
+        self.fns = glob.glob(path)
+        self.fns = sorted(self.fns)
+        self.counter = 0
         pass
     
-    def frame(self, gray = False):
-        if self.dir.position < self.dir.getCount():
+    def frame(self, gray=False):
+        print self.counter, len(self.fns)
+        if self.counter < len(self.fns):
             if gray:
-                image = cv2.imread(self.dir.getNext(),0)
+                image = cv2.imread(self.fns[self.counter], 0)
             else:
-                image = cv2.imread(self.dir.getNext())
+                image = cv2.imread(self.fns[self.counter])
+            self.counter += 1
             return image
         else:
             return None

@@ -1,4 +1,3 @@
-#! /usr/bin/python
 # -*- coding: utf-8 -*-
 
 """
@@ -188,7 +187,7 @@ def qprod(q, r):
     :param r:
     :return:
     """
-    t = np.zeros([4, 1], dtype=np.float32)
+    t = np.zeros(4, dtype=np.float32)
     t[0] = (r[0] * q[0] - r[1] * q[1] - r[2] * q[2] - r[3] * q[3])
     t[1] = (r[0] * q[1] + r[1] * q[0] - r[2] * q[3] + r[3] * q[2])
     t[2] = (r[0] * q[2] + r[1] * q[3] + r[2] * q[0] - r[3] * q[1])
@@ -244,8 +243,8 @@ def xyz_dh_dhrl(inparams, xv, y, zi):
 
     hrl = np.dot(mat_r_rw, y - xv[0:3])
     xyz_dhu_dhrl = np.zeros([2, 3], dtype=np.float32)
-    xyz_dhu_dhrl[:, :] = [[inparams['fku'] / hrl[2], 0, -hrl[0] * inparams.fku / (hrl[2] ** 2)],
-                          [0, inparams['fkv'] / hrl[2], -hrl[0] * inparams.fkv / (hrl[2] ** 2)]]
+    xyz_dhu_dhrl[:, :] = [[inparams['fku'] / hrl[2], 0, -hrl[0] * inparams['fku'] / (hrl[2] ** 2)],
+                          [0, inparams['fkv'] / hrl[2], -hrl[0] * inparams['fkv'] / (hrl[2] ** 2)]]
     a = np.dot(xyz_dhd_dhu, xyz_dhu_dhrl)
     return a
 
@@ -282,16 +281,73 @@ def id_dh_dy(inparams, xv, y, zi):
     :param zi:
     :return:
     """
-    id_dhrl_dy = np.linalg.inv(q2r(xv))
+    inv_mat_r = np.linalg.inv(q2r(xv))
+    id_dhrl_dy = np.zeros([3, 6], dtype=np.float32)
+    id_dhrl_dy[0:3, 0:3] = y[5] * inv_mat_r
+    temp = np.zeros(3, dtype=np.float32)
+    temp[:] = [math.cos(y[4])*math.cos(y[3]), 0,
+               -math.cos(y[4]) * math.sin(y[3])]
+    id_dhrl_dy[0:3, 3] = np.dot(inv_mat_r, temp)
+    temp[:] = [-math.sin(y[4])*math.sin(y[3]), -math.cos(y[4]),
+               -math.sin(y[4]) * math.cos(y[3])]
+    id_dhrl_dy[0:3, 4] = np.dot(inv_mat_r, temp)
+    id_dhrl_dy[0:3, 5] = np.dot(inv_mat_r, y[0:3] - xv[0:3])
+
     return np.dot(id_dh_dhrl(inparams, xv, y, zi), id_dhrl_dy)
 
 
 def id_dh_dhrl(inparams, xv, y, zi):
-    pass
+    """
+
+    :param inparams:
+    :param xv:
+    :param y:
+    :param zi:
+    :return:
+    """
+    id_dhd_dhu = np.linalg.inv(jacob_undistort_fm(zi, inparams))
+    inv_mat_r = np.linalg.inv(q2r(xv[3:7]))
+    temp = np.zeros(3, dtype=np.float32)
+    temp[:] = [math.cos(y[4])*math.sin(y[3]), -math.sin(y[4]),
+               math.cos(y[4]) * math.cos(y[3])]
+    hrl = np.dot(inv_mat_r, y[0:3] - xv[0:3])*y[5] + temp
+    id_dhu_dhrl = np.zeros([2, 3], dtype=np.float32)
+    id_dhu_dhrl[0:2, 0:2] = np.diag(
+        [inparams['fku']/hrl[2],
+         inparams['fkv']/hrl[2]]).astype(np.float32)
+    id_dhu_dhrl[0, 2] = -hrl[0]*inparams['fku']/(hrl[2]**2)
+    id_dhu_dhrl[1, 2] = -hrl[1]*inparams['fkv']/(hrl[2]**2)
+    return np.dot(id_dhd_dhu, id_dhu_dhrl)
 
 
 def id_dh_dxv(inparams, xv, y, zi):
-    pass
+    """
+
+    :param inparams:
+    :param xv:
+    :param y:
+    :param zi:
+    :return:
+    """
+    mat_h = np.zeros([2, 13], dtype=np.float32)
+
+    id_dhrl_drw = np.linalg.inv(q2r(xv[3:7]))*y[5]
+    id_dh_drw = np.dot(id_dh_dhrl(inparams, xv, y, zi), id_dhrl_drw)
+
+    mi = m(y[4], y[3])
+    dqbar_dq = np.identity(4, dtype=np.float32)
+    dqbar_dq[1:, 1:] *= -1
+    q = xv[3:7]
+    q[1:] *= -1
+    if_dhrl_dqrw = np.dot(d_r_q_times_a_by_dq(q, (y[0:3] - xv[0:3]) * y[5] + mi),
+                           dqbar_dq)
+
+    id_dh_dqrw = np.dot(id_dh_dhrl(inparams, xv, y, zi), if_dhrl_dqrw)
+
+    mat_h[0:2, 0:3] = id_dh_drw
+    mat_h[0:2, 3:7] = id_dh_dqrw
+
+    return mat_h
 
 
 def distort_fm(uv_u, inparams):
@@ -307,8 +363,8 @@ def distort_fm(uv_u, inparams):
     ru = np.sqrt(ru_2)
     rd = ru/float(1+inparams['kd1']*ru_2 + inparams['kd2']*(ru_2**2))
     for k in range(10):
-        f = rd + inparams['kd1']*(rd**3) + inparams['kd2']*(rd**5) - ru
-        f_p = 1 + 3*inparams['kd1']*(rd**2) + inparams['kd2']*(rd**4)
+        f = rd + inparams['kd1'] * (rd**3) + inparams['kd2']*(rd**5) - ru
+        f_p = 1 + 3*inparams['kd1'] * (rd**2) + inparams['kd2']*(rd**4)
         rd = rd - (f/f_p)
     pass
     rd_2 = rd**2
@@ -349,7 +405,7 @@ def jacob_undistort_fm(uv_d, inparams):
     rd = np.sqrt(rd_2)
     d1 = float(1+inparams['kd1']*rd_2 + inparams['kd2']*(rd_2**2))
     d2 = float(inparams['kd1'] + 2*inparams['kd2']*rd)
-    j_un = np.zeros([2,2], dtype=np.float32)
+    j_un = np.zeros([2, 2], dtype=np.float32)
     j_un[0, 0] = d1 + (uv_d[0] - inparams['u0'])*d2*2*xd*inparams['d']
     j_un[0, 1] = (uv_d[0] - inparams['u0'])*d2*2*yd*inparams['d']
     j_un[1, 0] = (uv_d[1] - inparams['v0'])*d2*2*xd*inparams['d']
@@ -387,11 +443,11 @@ def d_r_q_times_a_by_dq(q, a):
     :param a:
     :return:
     """
-    drq = np.zeros([3,4], dtype=np.float32)
+    drq = np.zeros([3, 4], dtype=np.float32)
     drq[0:3, 0] = np.dot(d_r_by_dq0(q), a)
-    drq[1:3, 0] = np.dot(d_r_by_dqx(q), a)
-    drq[2:3, 0]= np.dot(d_r_by_dqy(q), a)
-    drq[3:3, 0] = np.dot(d_r_by_dqz(q), a)
+    drq[0:3, 1] = np.dot(d_r_by_dqx(q), a)
+    drq[0:3, 2] = np.dot(d_r_by_dqy(q), a)
+    drq[0:3, 3] = np.dot(d_r_by_dqz(q), a)
     return drq
 
 
@@ -447,14 +503,53 @@ def d_r_by_dqz(q):
     return res_mat
 
 
-def rotate_with_dist_fc_c2c1(uv_c1, R_c2c1, t_c2c1, n, d, inparams):
-    uv_c2 = np.zeros(3)
-    return uv_c2
+def rotate_with_dist_fc_c2c1(uv_c1, mat_r, t, n, d, inparams):
+    """
+
+    :param uv_c1:
+    :param mat_r:
+    :param t:
+    :param n:
+    :param d:
+    :param inparams:
+    :return:
+    """
+    uv_c = undistort_fm(uv_c1, inparams)
+    mat_k = np.diag([inparams['fku'], inparams['fkv'], 1]).astype(np.float32)
+    mat_k[0, 2] = inparams['u0']
+    mat_k[1, 2] = inparams['v0']
+    mat_k2 = np.dot(mat_k, (mat_r - (np.dot(t, n.T/float(d)))))
+    mat_k2 = np.dot(mat_k2, np.linalg.inv(mat_k))
+    mat_k = np.linalg.inv(mat_k2)
+    temp = np.ones(3, dtype=np.float32)
+    temp[0:2] = uv_c
+    temp = np.dot(mat_k, temp)
+    uv_c2 = temp[0:2]/temp[2]
+    return distort_fm(uv_c2, inparams)
 
 
-def rotate_with_dist_fc_c1c2(uv_c2, R_c2c1, t_c2c1, n, d, inparams):
-    uv_c1 = np.zeros(3)
-    return uv_c1
+def rotate_with_dist_fc_c1c2(uv_c2, mat_r, t, n, d, inparams):
+    """
+
+    :param uv_c2:
+    :param mat_r:
+    :param t:
+    :param n:
+    :param d:
+    :param inparams:
+    :return:
+    """
+    uv_c = undistort_fm(uv_c2, inparams)
+    mat_k = np.diag([inparams['fku'], inparams['fkv'], 1]).astype(np.float32)
+    mat_k[0, 2] = inparams['u0']
+    mat_k[1, 2] = inparams['v0']
+    mat_k2 = np.dot(mat_k, (mat_r - (np.dot(t, n.T/float(d)))))
+    mat_k = np.dot(mat_k2, np.linalg.inv(mat_k))
+    temp = np.ones(3, dtype=np.float32)
+    temp[0:2] = uv_c
+    temp = np.dot(mat_k, temp)
+    uv_c1 = temp[0:2]/temp[2]
+    return distort_fm(uv_c1, inparams)
 
 
 def m(phi, theta):
@@ -470,94 +565,22 @@ def m(phi, theta):
 
 
 def id2cartesian(yi):
-    pass
+    """
+
+    :param yi:
+    :return:
+    """
+    temp = m(yi[4], yi[3])
+    return yi[0:3] + (1/float(yi[5])) * temp
 
 
 def std_dev(im, mean):
-    std = 0
+    """
+
+    :param im:
+    :param mean:
+    :return:
+    """
+    temp = np.ones(im.shape, dtype=np.float32) * mean
+    std = np.sqrt(np.mean((im - temp)**2))
     return std
-
-
-class quaternion:
-    # konstruktor
-    def __init__(self):  #
-        pass
-
-    def multiply(self, q, r):
-        t = np.zeros([4, 1], dtype=np.double)
-        t[0] = (r[0] * q[0] - r[1] * q[1] - r[2] * q[2] - r[3] * q[3])
-        t[1] = (r[0] * q[1] + r[1] * q[0] - r[2] * q[3] + r[3] * q[2])
-        t[2] = (r[0] * q[2] + r[1] * q[3] + r[2] * q[0] - r[3] * q[1])
-        t[3] = (r[0] * q[3] - r[1] * q[2] + r[2] * q[1] + r[3] * q[0])
-        return t
-
-    def divide(self, q, r):
-        t = np.zeros([4, 1], dtype=np.double)
-        t[0] = (r[0] * q[0] + r[1] * q[1] + r[2] * q[2] + r[3] * q[3])
-        t[1] = (r[0] * q[1] - r[1] * q[0] - r[2] * q[3] + r[3] * q[2])
-        t[2] = (r[0] * q[2] + r[1] * q[3] - r[2] * q[0] - r[3] * q[1])
-        t[3] = (r[0] * q[3] - r[1] * q[2] + r[2] * q[1] - r[3] * q[0])
-        normVal = r[0] * r[0] + r[1] * r[1] + r[2] * r[2] + r[3] * r[3]
-        t = t / normVal
-        return t
-
-    def conjugate(self, q):
-        q[1:] = -q[1:]
-        return q
-
-    def modulus(self, q):
-        modul = np.sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3])
-        return modul
-
-    def inv(self, q):
-        normVal = q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]
-        q = q / normVal
-        return q
-
-    def norm(self, q):
-        normVal = q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]
-        return normVal
-
-    def normalize(self, q):
-        modul = np.sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3])
-        q = q / modul
-        return q
-
-    def rotate(self, q, v):  # rotate to new position
-        vv = np.zeros([3, 1], dtype=np.double)
-        pom = np.zeros([3, 1], dtype=np.double)
-        pom[0] = (1 - 2 * q[2] * q[2] - 2 * q[3] * q[3])
-        pom[1] = (2 * (q[1] * q[2] + q[0] * q[3]))
-        pom[2] = (2 * (q[1] * q[3] - q[0] * q[2]))
-        print pom.T
-        print v
-        vv[0] = np.dot(pom.T, v)
-        pom[1] = (1 - 2 * q[1] * q[1] - 2 * q[3] * q[3])
-        pom[0] = (2 * (q[1] * q[2] - q[0] * q[3]))
-        pom[2] = (2 * (q[2] * q[3] + q[0] * q[1]))
-        vv[1] = np.dot(pom.T, v)
-        pom[2] = (1 - 2 * q[1] * q[1] - 2 * q[2] * q[2])
-        pom[1] = (2 * (q[2] * q[3] - q[0] * q[1]))
-        pom[0] = (2 * (q[1] * q[3] + q[0] * q[2]))
-        vv[2] = np.dot(pom.T, v)
-        return vv
-
-    def rotationMatrix(q):  # matrix representation of quaternion
-        R = np.zeros([3, 3], dtype=np.double)
-        R[0, 0] = q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3]
-        R[1, 1] = q[0] * q[0] - q[1] * q[1] + q[2] * q[2] - q[3] * q[3]
-        R[2, 2] = q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3]
-        R[1, 0] = 2 * (q[1] * q[2] + q[0] * q[3])
-        R[0, 1] = 2 * (q[1] * q[2] - q[0] * q[3])
-        R[2, 0] = 2 * (q[1] * q[3] - q[0] * q[2])
-        R[0, 2] = 2 * (q[1] * q[3] + q[0] * q[2])
-        R[2, 1] = 2 * (q[2] * q[3] + q[0] * q[1])
-        R[1, 2] = 2 * (q[2] * q[3] - q[0] * q[1])
-        return R
-
-        pass
-
-
-
-
-

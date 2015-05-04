@@ -11,13 +11,8 @@
 
     "source" : [
         "dir",
-        "/home/neduchal/Dokumenty/datasety/08/image_0/"        
+        "/home/neduchal/Dokumenty/data/ic/*.*"
     ],
-
-    "input_parameters" : [
-        "file",
-        "./parameters1.cjson" 
-    ]	
 
     "detector" : {
         "type" : "surf",
@@ -26,6 +21,22 @@
             "threshold" : 50,
             "nonmaxSuppression" : 0
         }
-    } 
+    },
+
+    "params" : {
+        "width": 320,
+        "height": 240,
+        "u0" : 160.0,
+        "v0" : 120.0,
+        "fku" : 194.06,
+        "fkv" : 194.06,
+        "kd1" : 0.06333,
+        "kd2" : 0.0139,
+        "image_noise" : 1,
+        "sd" : 1,
+        "d" : 0.0112,
+        "dt" : 0.1
+    }
+
     
 }

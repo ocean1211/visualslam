@@ -19,3 +19,84 @@ void setInputParamStruct(InputParams *IP, int cam, int w, int h,
 
 
 }
+
+
+class quaternion:
+    # konstruktor
+    def __init__(self):  #
+        pass
+
+    def multiply(self, q, r):
+        t = np.zeros([4, 1], dtype=np.double)
+        t[0] = (r[0] * q[0] - r[1] * q[1] - r[2] * q[2] - r[3] * q[3])
+        t[1] = (r[0] * q[1] + r[1] * q[0] - r[2] * q[3] + r[3] * q[2])
+        t[2] = (r[0] * q[2] + r[1] * q[3] + r[2] * q[0] - r[3] * q[1])
+        t[3] = (r[0] * q[3] - r[1] * q[2] + r[2] * q[1] + r[3] * q[0])
+        return t
+
+    def divide(self, q, r):
+        t = np.zeros([4, 1], dtype=np.double)
+        t[0] = (r[0] * q[0] + r[1] * q[1] + r[2] * q[2] + r[3] * q[3])
+        t[1] = (r[0] * q[1] - r[1] * q[0] - r[2] * q[3] + r[3] * q[2])
+        t[2] = (r[0] * q[2] + r[1] * q[3] - r[2] * q[0] - r[3] * q[1])
+        t[3] = (r[0] * q[3] - r[1] * q[2] + r[2] * q[1] - r[3] * q[0])
+        normVal = r[0] * r[0] + r[1] * r[1] + r[2] * r[2] + r[3] * r[3]
+        t = t / normVal
+        return t
+
+    def conjugate(self, q):
+        q[1:] = -q[1:]
+        return q
+
+    def modulus(self, q):
+        modul = np.sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3])
+        return modul
+
+    def inv(self, q):
+        normVal = q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]
+        q = q / normVal
+        return q
+
+    def norm(self, q):
+        normVal = q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]
+        return normVal
+
+    def normalize(self, q):
+        modul = np.sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3])
+        q = q / modul
+        return q
+
+    def rotate(self, q, v):  # rotate to new position
+        vv = np.zeros([3, 1], dtype=np.double)
+        pom = np.zeros([3, 1], dtype=np.double)
+        pom[0] = (1 - 2 * q[2] * q[2] - 2 * q[3] * q[3])
+        pom[1] = (2 * (q[1] * q[2] + q[0] * q[3]))
+        pom[2] = (2 * (q[1] * q[3] - q[0] * q[2]))
+        print pom.T
+        print v
+        vv[0] = np.dot(pom.T, v)
+        pom[1] = (1 - 2 * q[1] * q[1] - 2 * q[3] * q[3])
+        pom[0] = (2 * (q[1] * q[2] - q[0] * q[3]))
+        pom[2] = (2 * (q[2] * q[3] + q[0] * q[1]))
+        vv[1] = np.dot(pom.T, v)
+        pom[2] = (1 - 2 * q[1] * q[1] - 2 * q[2] * q[2])
+        pom[1] = (2 * (q[2] * q[3] - q[0] * q[1]))
+        pom[0] = (2 * (q[1] * q[3] + q[0] * q[2]))
+        vv[2] = np.dot(pom.T, v)
+        return vv
+
+    def rotationMatrix(q):  # matrix representation of quaternion
+        R = np.zeros([3, 3], dtype=np.double)
+        R[0, 0] = q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3]
+        R[1, 1] = q[0] * q[0] - q[1] * q[1] + q[2] * q[2] - q[3] * q[3]
+        R[2, 2] = q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3]
+        R[1, 0] = 2 * (q[1] * q[2] + q[0] * q[3])
+        R[0, 1] = 2 * (q[1] * q[2] - q[0] * q[3])
+        R[2, 0] = 2 * (q[1] * q[3] - q[0] * q[2])
+        R[0, 2] = 2 * (q[1] * q[3] + q[0] * q[2])
+        R[2, 1] = 2 * (q[2] * q[3] + q[0] * q[1])
+        R[1, 2] = 2 * (q[2] * q[3] - q[0] * q[1])
+        return R
+
+        pass
+

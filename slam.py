@@ -14,9 +14,7 @@ import argparse
 # Parts of system
 # -----------------------------------------------------------------------------
 from inout import *
-from fd import *
-from vis import *
-from epipolar import *
+import monocularSlam as ms
 
 configFile = "config/config1.json"
 
@@ -31,35 +29,22 @@ def main():
     else: 
         source = images.ImageDirectory(config["source"][1])
     
-    # Nacteni prvniho snimku
-    frame = source.frame(gray = True)
+    mono = ms.Slam(source, config['params'])
+    mono.init()
 
-    # nacteni prvniho snimku
-    oldframe = frame 
-    oldkp = detectors.detect("SURF", frame)
-
-    # MAIN LOOP
-    while not frame == None:
-        # Zpracovani dat
-        
-        
-        
-        
-        # Nacteni dalsiho snimku    
-        frame = source.frame(gray = True)      
-        
-        # Feature detection        
-        kp = detectors.detect("SURF", frame)
-                     
-                     
-        oldframe = frame 
-        
-        # Zobrazeni aktualniho snimku        
-        cv2.imshow("Data", frame)
-        
-        # Vyckavani + preruseni pri stisku q
-        if cv2.waitKey(30) & 0xFF == ord('q'):
+    while True:
+        frame = mono.step()
+        if mono.end is True:
             break
+        cv2.imshow('vizualization', frame)
+
+        key = cv2.waitKey(0)
+        if key == 'e':
+            mono.stepOn = False
+        elif key == 's':
+            mono.stepOn = True
+        elif key == 'k':
+            mono.end = True
  
     cv2.destroyAllWindows() 
 

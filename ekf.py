@@ -28,10 +28,10 @@ class Ekf:
         :return:
         """
         self.dtime = dt
-        self.x = np.zeros(13, dtype=np.float32)
-        self.x_p = np.zeros(13, dtype=np.float32)
-        self.P = np.zeros([13, 13], dtype=np.float32)
-        self.P_p = np.zeros([13, 13], dtype=np.float32)
+        self.x = np.zeros(13, dtype=np.float64)
+        self.x_p = np.zeros(13, dtype=np.float64)
+        self.P = np.zeros([13, 13], dtype=np.float64)
+        self.P_p = np.zeros([13, 13], dtype=np.float64)
         # LINEAR ACCELERATION DEV
         self.lin_dev = lin
         # ANGULAR ACCELERATION DEV
@@ -54,11 +54,11 @@ class Ekf:
         lincov = self.lin_dev ** 2 * self.dtime ** 2
         angcov = self.ang_dev ** 2 * self.dtime ** 2
 
-        mat_pn = np.zeros([6, 6], dtype=np.float32)
+        mat_pn = np.zeros([6, 6], dtype=np.float64)
         mat_pn[0:3, 0:3] = np.identity(3) * lincov
         mat_pn[3:6, 3:6] = np.identity(3) * angcov
 
-        mat_g = np.zeros([13, 6], dtype=np.float32)
+        mat_g = np.zeros([13, 6], dtype=np.float64)
         mat_g[7:10, 0:3] = np.identity(3)
         mat_g[10:13, 3:6] = np.identity(3)
         mat_g[0:3, 0:3] = np.identity(3) * self.dtime
@@ -69,12 +69,12 @@ class Ekf:
 
         mat_q = np.dot(np.dot(mat_g, mat_pn), mat_g.T)
 
-        self.P_p = np.zeros(self.P.shape, dtype=np.float32)
-        self.P_p[0:13, 0:13] = np.dot(np.dot(jacobian_fv_xv, self.P), jacobian_fv_xv.T) + mat_q
+        self.P_p = np.zeros(self.P.shape, dtype=np.float64)
+        self.P_p[0:13, 0:13] = np.dot(np.dot(jacobian_fv_xv, self.P[0:13, 0:13]), jacobian_fv_xv.T) + mat_q
         if self.P.shape[0] > 13:
             self.P_p[13:, 13:] = self.P[13:, 13:]
             self.P_p[0:13, 13:] = np.dot(jacobian_fv_xv, self.P_p[0:13, 13:])
-            self.P_p[13:, 0:13] = np.dot(self.P_p[0:13, 13:], jacobian_fv_xv.T)
+            self.P_p[13:, 0:13] = np.dot(self.P_p[13:, 0:13], jacobian_fv_xv.T)
         pass
 
     def predict_motion(self):
@@ -82,21 +82,22 @@ class Ekf:
 
         :return:
         """
+        self.x_p = self.x.copy()
         r = self.x[0:3]
         q = self.x[3:7]
-        v = self.x[7, 10]
+        v = self.x[7:10]
         omega = self.x[10:13]
         qwt = mathematics.quaternion_from_angular_velocity(omega * self.dtime)
         self.x_p[0:3] = r + v * self.dtime
-        self.x_p[3:7] = q * mathematics.qprod(q, qwt)
+        self.x_p[3:7] = mathematics.qprod(q, qwt)
 
     def predict_motion_jacobian(self):
         """
 
         :return:
         """
-        jacobian_fv_xv = np.identity(13, dtype=np.float32)
-        temp3x3a = np.identity(13, dtype=np.float32) * self.dtime
+        jacobian_fv_xv = np.identity(13, dtype=np.float64)
+        temp3x3a = np.identity(3, dtype=np.float64) * self.dtime
         jacobian_fv_xv[0:3, 7:10] = temp3x3a
         qwt = mathematics.quaternion_from_angular_velocity(self.x[10:13] * self.dtime)
         jacobian_fv_xv[3:7, 3:7] = mathematics.dq3_by_dq2(qwt)
