@@ -16,7 +16,7 @@ import argparse
 from inout import *
 import monocularSlam as ms
 
-configFile = "config/config1.json"
+configFile = "../config/config1.json"
 
 
 def main():
@@ -29,7 +29,7 @@ def main():
     else: 
         source = images.ImageDirectory(config["source"][1])
     
-    mono = ms.Slam(source, config['params'])
+    mono = ms.Slam(source, config['camera_params'])
     mono.init()
 
     while True:

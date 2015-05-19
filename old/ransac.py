@@ -35,7 +35,7 @@ class Ransac:
         n = 0
         while n < n_hyp:
             position, zi, num_ic_matches = self.select_random_match(features)
-            print position, zi, num_ic_matches
+            #print position, zi, num_ic_matches
             hi = features[position]['h']
             mat_hi = features[position]['H']
             mat_s = np.dot(np.dot(mat_hi, mat_p_p), mat_hi.T) + features[position]['R']
@@ -123,13 +123,13 @@ class Ransac:
                                     sd2 = mathematics.std_dev(im2, m_im2)
                                     if sd1*sd2 != 0:
 
-                                        corr = np.sum(temp)/(sd1*sd2)
+                                        corr = np.max(temp)
                                         if corr > max_corr:
                                             max_corr = corr
                                             candidate = np.array([x, y])
 
                     if max_corr > corr_thresh:
-                        print candidate
+                        #print candidate
                         map_obj.features[i]['individually_compatible'] = 1
                         candidate = candidate.astype(dtype=np.float32)
                         map_obj.features[i]['z'] = candidate

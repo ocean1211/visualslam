@@ -264,6 +264,8 @@ class Map:
                 2 * init_box_semisize[1] + 0.5) +
                 excluded_band + init_box_semisize[1])
 
+            print region_center
+
             for j in range(len(self.features)):
                 if self.features[j]['h'] is None:
                     continue
@@ -275,6 +277,7 @@ class Map:
                     break
             if are_there_features == 1:
                 continue
+
             frame_part = (frame[region_center[1] - init_box_semisize[1]:
                           region_center[1] + init_box_semisize[1],
                           region_center[0] - init_box_semisize[0]:
@@ -313,7 +316,6 @@ class Map:
         mat_r = mathematics.q2r(x[3:7])
         for i in range(len(self.features)):
             begin = self.features[i]['begin']
-            #print begin, x.shape[0]
             if self.features[i]['type'] == 1:
                 yi = x[begin:begin + 3]
                 hi = self.hi(yi, r, mat_r, inparams)
@@ -484,7 +486,7 @@ class Map:
         xyz_c[:] = [x_c, y_c, 1]
         xyz_w = np.dot(mat_r, xyz_c)
         dtheta_dgw = np.zeros(3, np.float64)
-        dtheta_dgw[:] = [(xyz_w[0] / (xyz_w[0] ** 2 + xyz_w[2] ** 2)), 0, (-xyz_w[0] / (xyz_w[0] ** 2 + xyz_w[2] ** 2))]
+        dtheta_dgw[:] = [(xyz_w[2] / (xyz_w[0] ** 2 + xyz_w[2] ** 2)), 0, (-xyz_w[0] / (xyz_w[0] ** 2 + xyz_w[2] ** 2))]
         dphi_dgw = np.zeros(3, np.float64)
         dphi_dgw[:] = [(xyz_w[0] * xyz_w[1]) / ((np.sum(xyz_w ** 2)) * np.sqrt(xyz_w[0] ** 2 + xyz_w[2] ** 2)),
                        -np.sqrt(xyz_w[0] ** 2 + xyz_w[2] ** 2) / (np.sum(xyz_w ** 2)),
@@ -615,15 +617,17 @@ class Map:
         """
         chi2inv_2_95 = 5.9915
         self.predict_camera_measurements(inparams, x)
-        self.calculate_derivatives(x, inparams)
+        self.calculate_derivatives(inparams, x)
         for i in range(len(self.features)):
             f = self.features[i]
-            nui = f['z'] - f['h']
-            si = np.dot(np.dot(f['H'], mat_p), f['H'].T)
-            temp = np.dot(np.dot(nui.T, np.linalg.inv(si)), nui)
+            if (f['individually_compatible'] == 1 and
+               f['low_innovation_inlier'] == 0):
+                nui = f['z'] - f['h']
+                si = np.dot(np.dot(f['H'], mat_p), f['H'].T)
+                temp = np.dot(np.dot(nui.T, np.linalg.inv(si)), nui)
 
-            if temp < chi2inv_2_95:
-                self.features[i]['high_innovation_inlier'] = 1
+                if temp < chi2inv_2_95:
+                    self.features[i]['high_innovation_inlier'] = 1
 
     def update_hi_inliers(self, ekf_filter):
         """

@@ -130,7 +130,7 @@ class Ekf:
 
             self.P[0:3, 3:7] = np.dot(self.P[0:3, 3:7], jnorm.T)
             self.P[3:7, 0:3] = np.dot(jnorm, self.P[3:7, 0:3])
-            self.P[3:7, 3:7] = np.dot(np.dot(jnorm, self.P[3:7, 0:3]), jnorm.T)
+            self.P[3:7, 3:7] = np.dot(np.dot(jnorm, self.P[3:7, 3:7]), jnorm.T)
             self.P[3:7, 7:] = np.dot(jnorm, self.P[3:7, 7:])
             self.P[7:, 3:7] = np.dot(self.P[7:, 3:7], jnorm.T)
 

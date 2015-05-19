@@ -63,7 +63,7 @@ class Slam:
         # MAP.manage
         self.ekf_filter.x, self.ekf_filter.P = self.m_map.manage(
             self.ekf_filter.x, self.ekf_filter.P,
-            self.params, frame, self.counter)
+            self.params, frame, self.counter, 30)
 
         # Filter prediction
         self.ekf_filter.predict()
@@ -91,7 +91,7 @@ class Slam:
             )
         # Filter update
         self.ekf_filter = self.m_map.update_li_inliers(self.ekf_filter)
-        self.m_map.resque_hi_inliers(
+        self.m_map.rescue_hi_inliers(
             self.ekf_filter.x,
             self.ekf_filter.P,
             self.params
@@ -102,11 +102,11 @@ class Slam:
 
         for f in self.m_map.features:
             if f['individually_compatible']:
-                cv2.circle(frame2, (f['h'][1], f['h'][0]), 4, (0, 0, 255), 3)
+                cv2.circle(frame2, (f['h'][0], f['h'][1]), 4, (0, 0, 255), 3)
             if f['low_innovation_inlier']:
-                cv2.circle(frame2, (f['h'][1], f['h'][0]), 4, (0, 255, 0), 3)
+                cv2.circle(frame2, (f['h'][0], f['h'][1]), 4, (0, 255, 0), 3)
             if f['high_innovation_inlier']:
-                cv2.circle(frame2, (f['h'][1], f['h'][0]), 4, (255, 0, 0), 3)
+                cv2.circle(frame2, (f['h'][0], f['h'][1]), 4, (255, 0, 0), 3)
 
         # show
 
