@@ -79,7 +79,36 @@ def undistort_fm(uv_d, inparams):
     return uv_u
 
 
+def jacob_undistort_fm(uv_d, camera):
+    """
+
+    :param uv_d:
+    :param camera:
+    :return:
+    """
+    xd = (uv_d[0]-camera['u0'])*camera['d']
+    yd = (uv_d[1]-camera['v0'])*camera['d']
+    rd_2 = xd**2 + yd**2
+    rd = np.sqrt(rd_2)
+    d1 = float(1+camera['kd1']*rd_2 + camera['kd2']*(rd_2**2))
+    d2 = float(camera['kd1'] + 2*camera['kd2']*rd)
+    j_un = np.zeros([2, 2], dtype=np.float32)
+    j_un[0, 0] = d1 + (uv_d[0] - camera['u0'])*d2*2*xd*camera['d']
+    j_un[0, 1] = (uv_d[0] - camera['u0'])*d2*2*yd*camera['d']
+    j_un[1, 0] = (uv_d[1] - camera['v0'])*d2*2*xd*camera['d']
+    j_un[1, 1] = d1 + (uv_d[1] - camera['v0'])*d2*2*yd*camera['d']
+    return j_un
+
+
 def hinv(uv, x, camera, rho):
+    """
+
+    :param uv:
+    :param x:
+    :param camera:
+    :param rho:
+    :return:
+    """
     uv_u = undistort_fm(uv, camera)
     h = np.array([-(camera['u0']-uv_u[0])/camera['fku'],
                   -(camera['v0']-uv_u[1])/camera['fkv'],
@@ -91,6 +120,7 @@ def hinv(uv, x, camera, rho):
               math.atan2(-n[1], np.sqrt(n[0]**2 + n[2]**2)),
               rho]
     return xf
+
 
 def d_r_q_times_a_by_dq(q, a):
     """
