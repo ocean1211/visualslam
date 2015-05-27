@@ -9,14 +9,40 @@ import mathematics
 import detectors
 import derivations
 
+
+def manage(features, x, cov, frame, camera, detector, frame_num, min_num_of_features=10):
+    """
+
+    :param features:
+    :param x:
+    :param cov:
+    :param frame:
+    :param camera:
+    :param detector:
+    :param frame_num:
+    :param min_num_of_features:
+    :return:
+    """
+    delete_features(features, x, cov)
+    measured = 0
+    for feature in features:
+        if feature['inlier']:
+            measured += 1
+    update_features_info(features)
+    x, cov = inverse_depth2xyz(features, x, cov)
+    if measured < min_num_of_features:
+        x, cov = init_new_features(x, cov, frame, camera, detector, features, frame_num, min_num_of_features - measured)
+    return x, cov
+
+
 def add_feature(features, x, xf, uv, im, frame_num):
     """
 
+    :param features:
     :param x:
     :param xf:
     :param uv:
     :param im:
-    :param begin:
     :param frame_num:
     :return:
     """
@@ -48,11 +74,12 @@ def add_feature(features, x, xf, uv, im, frame_num):
     features.append(f)
 
 
-def delete_features(x, cov, features):
+def delete_features(features, x, cov):
     """
 
     :param x:
     :param cov:
+    :param features:
     :return:
     """
     if len(features) == 0:
@@ -68,7 +95,7 @@ def delete_features(x, cov, features):
             x, cov = delete_feature(x, cov, i, features)
             del_list.append(i)
 
-    for i in del_list:
+    for i in reversed(del_list):
         features.pop(i)
     return x, cov
 
@@ -79,6 +106,7 @@ def delete_feature(x, cov, f_id, features):
     :param x:
     :param cov:
     :param f_id:
+    :param features:
     :return:
     """
     rows2delete = features[f_id]['type'] * 3
@@ -99,15 +127,16 @@ def delete_feature(x, cov, f_id, features):
     return x, cov
 
 
- def update_features_info(features):
+def update_features_info(features):
     """
 
+    :param features:
     :return:
     """
     for i in range(len(features)):
         if features[i]['h'] is not None:
             features[i]['predicted'] += 1
-        if features[i]['inlier'] :
+        if features[i]['inlier'] == 1:
             features[i]['measured'] += 1
         features[i]['match'] = 0
         features[i]['inlier'] = 0
@@ -222,6 +251,13 @@ def find_new_feature(image, camera, detector, features, size=np.array([30, 20]))
     return np.array([xp, yp]), im_part
 
 def compute_dxf_dxv(h_w, h_c, x):
+    """
+
+    :param h_w:
+    :param h_c:
+    :param x:
+    :return:
+    """
     dtheta_dgw = derivations.dtheta_dgw(h_w)
     dphi_dgw = derivations.dphi_dgw(h_w)
     dgw_dqwr = derivations.dgw_dqwr(x, h_c)
@@ -232,6 +268,14 @@ def compute_dxf_dxv(h_w, h_c, x):
     return derivations.dxf_dxv(dxf_drw, dxf_dqwr)
 
 def compute_dxf_dhd(h_w, mat_r, xy, camera):
+    """
+
+    :param h_w:
+    :param mat_r:
+    :param xy:
+    :param camera:
+    :return:
+    """
     dtheta_dgw = derivations.dtheta_dgw(h_w)
     dphi_dgw = derivations.dphi_dgw(h_w)
     dxfprima_dgw = derivations.dxfprima_dqw(dtheta_dgw, dphi_dgw)
@@ -283,3 +327,52 @@ def compute_new_feature(x, cov, xy, camera):
 
     cov = mat_p2
     return x, cov, xf
+
+def inverse_depth2xyz(features, x, cov):
+    """
+
+    :param features:
+    :param x:
+    :param cov:
+    :return:
+    """
+    lin_index_thresh = 0.1
+    convert = 0
+
+    for i in range(len(self.features)):
+        if convert == 1:
+            features[i]['begin'] -= 3
+            continue
+        if features[i]['type'] == 2:
+            begin = features[i]['begin']
+            std_rho = np.sqrt(cov[begin + 5, begin + 5])
+            rho = x[begin + 5]
+            std_d = std_rho / (rho ** 2)
+            theta = x[begin + 3]
+            phi = x[begin + 4]
+            mi = mathematics.m(theta, phi)
+            x_c1 = x[begin:begin + 3]
+            x_c2 = x[0:3]
+            xyz = x_c2 + (1 / rho) * mi
+            temp = xyz - x_c2
+            temp2 = xyz - x_c1
+            d_c2p = np.linalg.norm(temp)
+            cos_alpha = (np.dot(temp.T, temp2) / (d_c2p * np.linalg.norm(temp2)))
+            linearity_index = 4 * std_d * cos_alpha / d_c2p
+            if linearity_index < lin_index_thresh:
+                x2 = np.zeros(x.shape[0] - 3, dtype=np.float64)
+                x2[0:begin] = x[0:begin]
+                x2[begin:begin + 3] = x[begin:begin + 3]
+                if x.shape[0] > begin + 6:
+                    x2[begin + 3:] = x[begin + 6:]
+                mat_j = np.zeros([3, 6], dtype=np.float64)
+                mat_j[0:3, 0:3] = np.identity(3, dtype=np.float64)
+                mat_j[:, 3] = (1 / rho) * np.array([np.cos(phi) * np.cos(theta), 0.0, -np.cos(phi) * np.sin(theta)])
+                mat_j[:, 4] = (1 / rho) * np.array([-np.sin(phi) * np.sin(theta), -np.cos(phi), -np.sin(phi) * np.cos(theta)])
+                mat_j[:, 5] = mi / rho ** 2
+                mat_j_all = np.identity(cov.shape[0], dtype=np.float64)
+                mat_j_all[begin:begin + mat_j.shape[0], begin:begin + mat_j.shape[1]] = mat_j
+                cov = np.dot(np.dot(mat_j_all, cov), mat_j_all.T)
+                convert = 1
+                features[i]['type'] = 1
+    return x, cov
