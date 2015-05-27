@@ -250,8 +250,8 @@ def compute_new_feature(x, cov, xy, camera):
     :param camera:
     :return:
     """
-    rho = 1
-    std_rho = 1
+    rho = 0.1
+    std_rho = 0.5
     # State vector
     xf = mathematics.hinv(xy, x, camera, rho)
     x = np.concatenate([x, xf])
@@ -266,23 +266,20 @@ def compute_new_feature(x, cov, xy, camera):
     dxf_dxv = compute_dxf_dxv(h_w, h_c, x)
     dxf_dhd = compute_dxf_dhd(h_w, mat_r, xy, camera)
 
-    padd = np.zeros([3, 3], dtype=np.float64)
-    padd[0:2, 0:2] = np.identity(2, dtype=np.float64) * camera['sd'] ** 2
-    padd[2, 2] = std_rho
-
-    mat_p2 = np.zeros([cov.shape[0] + 6, cov.shape[1] + 6], dtype=np.float64)
-    mat_p2[0:cov.shape[0], 0:cov.shape[1]] = cov
-    mat_p2[cov.shape[0]:cov.shape[0] + 6, 0:13] = np.dot(dxf_dxv, cov[0:13, 0:13])
-    mat_p2[0:13, cov.shape[1]:cov.shape[1] + 6] = np.dot(cov[0:13, 0:13], dxf_dxv.T)
+    padd = np.diag([camera['sd']**2, camera['sd']**2, std_rho]).astype(np.float64)
 
     shp0 = cov.shape[0]
     shp1 = cov.shape[1]
-    if shp0 > 13:
-        mat_p2[shp0:shp0 + 6, 13:shp1] = np.dot(dxf_dxv, cov[0:13, 13:])
-        mat_p2[13:shp0, shp1:shp1 + 6] = np.dot(cov[13:, 0:13], dxf_dxv.T)
-        mat_p2[shp0:shp0 + 6, shp1:shp1 + 6] = (
-            np.dot(np.dot(dxf_dxv, cov[0:13, 0:13]), dxf_dxv.T) +
-            np.dot(np.dot(dxf_dhd, padd), dxf_dhd.T))
+
+    mat_p2 = np.zeros([shp0 + 6, shp1 + 6], dtype=np.float64)
+    mat_p2[0:shp0, 0:shp1] = cov
+
+    mat_p2[shp0:shp0 + 6, 0:shp1] = np.dot(dxf_dxv, cov[0:13, :])
+    mat_p2[0:shp0, shp1:shp1 + 6] = np.dot(cov[:, 0:13], dxf_dxv.T)
+
+    mat_p2[shp0:shp0 + 6, shp1:shp1 + 6] = (
+        np.dot(np.dot(dxf_dxv, cov[0:13, 0:13]), dxf_dxv.T) +
+        np.dot(np.dot(dxf_dhd, padd), dxf_dhd.T))
 
     cov = mat_p2
     return x, cov, xf

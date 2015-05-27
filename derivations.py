@@ -49,7 +49,7 @@ def dxf_drw():
 def dxf_dxv(p_dxf_drw, p_dxf_dqwr):
     p_dxf_dxv = np.zeros([6, 13], dtype=np.float64)
     p_dxf_dxv[0:6, 0:3] = p_dxf_drw
-    p_dxf_dxv[0:6, 4:8] = p_dxf_dqwr
+    p_dxf_dxv[0:6, 3:7] = p_dxf_dqwr
     return p_dxf_dxv
 
 
