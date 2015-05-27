@@ -663,7 +663,7 @@ class Map:
         h = None
         mat_h = None
         for i, f in enumerate(self.features):
-            if self.features[i]['high_innovation_inlier'] == 1:
+            if self.features[i]['low_innovation_inlier'] == 1:
                 if z is None:
                     z = f['z']
                     h = f['h']

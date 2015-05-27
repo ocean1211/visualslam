@@ -7,7 +7,7 @@ import math
 import mathematics
 
 import detectors
-
+import derivations
 
 def add_feature(features, x, xf, uv, im, frame_num):
     """
@@ -45,8 +45,103 @@ def add_feature(features, x, xf, uv, im, frame_num):
              S=None,
              begin=begin)
 
-
     features.append(f)
+
+
+def delete_features(x, cov, features):
+    """
+
+    :param x:
+    :param cov:
+    :return:
+    """
+    if len(features) == 0:
+        return x, cov
+    delete_move = 0
+    del_list = []
+    for i in range(len(features)):
+        if features[i]['times_predicted'] < 5:
+            continue
+        features[i]['begin'] -= delete_move
+        if features[i]['times_measured'] < 0.5 * features[i]['times_predicted']:
+            delete_move += features[i]['type'] * 2
+            x, cov = delete_feature(x, cov, i, features)
+            del_list.append(i)
+
+    for i in del_list:
+        features.pop(i)
+    return x, cov
+
+
+def delete_feature(x, cov, f_id, features):
+    """
+
+    :param x:
+    :param cov:
+    :param f_id:
+    :return:
+    """
+    rows2delete = features[f_id]['type'] * 3
+    begin = features[f_id]['begin']
+    # IN P
+    cov2 = np.zeros([cov.shape[0] - rows2delete, cov.shape[1] - rows2delete])
+    cov2[0:begin, 0:begin] = cov[0:begin, 0:begin]
+    if cov2.shape[0] > begin + rows2delete:
+        cov2[0:begin, begin:] = cov[0:begin, begin + rows2delete:]
+        cov2[begin:, 0:begin] = cov[begin + rows2delete:, 0:begin]
+        cov2[begin:, begin:] = cov[begin + rows2delete:, begin + rows2delete:]
+    cov = cov2
+    # IN X
+    x2 = np.zeros(x.shape[0] - rows2delete)
+    x2[0:begin] = x[0:begin]
+    x2[begin:] = x[begin + rows2delete:]
+    x = x2
+    return x, cov
+
+
+ def update_features_info(features):
+    """
+
+    :return:
+    """
+    for i in range(len(features)):
+        if features[i]['h'] is not None:
+            features[i]['predicted'] += 1
+        if features[i]['inlier'] :
+            features[i]['measured'] += 1
+        features[i]['match'] = 0
+        features[i]['inlier'] = 0
+        features[i]['h'] = None
+        features[i]['z'] = None
+        features[i]['H'] = None
+        features[i]['S'] = None
+    pass
+
+
+def init_new_features(x, cov, image, camera, detector, features, frame_num, num_of_features):
+    """
+
+    :param x:
+    :param cov:
+    :param image:
+    :param camera:
+    :param detector:
+    :param features:
+    :param frame_num:
+    :param num_of_features:
+    :return:
+    """
+    max_attempts = 50
+    attempts = 0
+    initialized = 0
+
+    while (initialized < num_of_features) and (attempts < max_attempts):
+        size = x.shape[0]
+        attempts += 1
+        x, cov = init_new_feature(x, cov, image, camera, detector, features, frame_num)
+        if size < x.shape[0]:
+            initialized += 1
+    return x, cov
 
 
 def init_new_feature(x, cov, image, camera, detector, features, frame_num):
@@ -64,6 +159,7 @@ def init_new_feature(x, cov, image, camera, detector, features, frame_num):
     xy, frame_part = find_new_feature(image, camera, detector, features)
     x, cov, xf = compute_new_feature(x, cov, xy, camera)
     add_feature(features, x, xf, xy, frame_part, frame_num)
+    return x, cov
 
 def predict_feature_measurement(x, camera, features):
     """
@@ -125,6 +221,25 @@ def find_new_feature(image, camera, detector, features, size=np.array([30, 20]))
 
     return np.array([xp, yp]), im_part
 
+def compute_dxf_dxv(h_w, h_c, x):
+    dtheta_dgw = derivations.dtheta_dgw(h_w)
+    dphi_dgw = derivations.dphi_dgw(h_w)
+    dgw_dqwr = derivations.dgw_dqwr(x, h_c)
+    dtheta_dqwr = derivations.dtheta_dqwr(dtheta_dgw, dgw_dqwr)
+    dphi_dqwr = derivations.dphi_dqwr(dphi_dgw, dgw_dqwr)
+    dxf_dqwr = derivations.dxf_dqwr(dtheta_dqwr, dphi_dqwr)
+    dxf_drw = derivations.dxf_drw()
+    return derivations.dxf_dxv(dxf_drw, dxf_dqwr)
+
+def compute_dxf_dhd(h_w, mat_r, xy, camera):
+    dtheta_dgw = derivations.dtheta_dgw(h_w)
+    dphi_dgw = derivations.dphi_dgw(h_w)
+    dxfprima_dgw = derivations.dxfprima_dqw(dtheta_dgw, dphi_dgw)
+    dgw_dgc = mat_r
+    dgc_dhu = derivations.dgc_dhu(camera)
+    dhu_dhd = derivations.dhu_dhd(xy, camera)
+    dxfprima_dhd = derivations.dxfprima_dhd(dxfprima_dgw, dgw_dgc, dgc_dhu, dhu_dhd)
+    return derivations.dxf_dhd(dxfprima_dhd)
 
 def compute_new_feature(x, cov, xy, camera):
     """
@@ -137,57 +252,19 @@ def compute_new_feature(x, cov, xy, camera):
     """
     rho = 1
     std_rho = 1
-
     # State vector
     xf = mathematics.hinv(xy, x, camera, rho)
     x = np.concatenate([x, xf])
-
     # Covariance
     mat_r = mathematics.q2r(x[3,7])
     uv_u = mathematics.undistort_fm(xy, camera)
     h_c = np.array([-(camera['u0']-uv_u[0])/camera['fku'],
                     -(camera['v0']-uv_u[1])/camera['fkv'],
                     1.0])
-
     h_w = np.dot(mat_r, h_c)
 
-    # Theta podle [x,y,z]
-    dtheta_dgw = np.array([h_w[2]/np.sum(h_w[[0, 2]]**2), 0, -h_w[0]/np.sum(h_w[[0, 2]]**2)])
-
-    # Phi podle [x,y,z]
-    dphi_dgw = np.array([(h_w[0] * h_w[1])/((np.sum(h_w ** 2)) * np.sqrt(h_w[[0, 2]]**2)),
-                         - np.sqrt(h_w[[0, 2]]**2)/(np.sum(h_w ** 2)),
-                         (h_w[2] * h_w[1])/((np.sum(h_w ** 2)) * np.sqrt(h_w[[0, 2]]**2))
-                         ])
-    # [x, y, z] podle q
-    dgw_dqwr = mathematics.d_r_q_times_a_by_dq(x[3:7], h_c)
-
-    dtheta_dqwr = np.dot(dtheta_dgw.T, dgw_dqwr)
-    dphi_dqwr = np.dot(dphi_dgw.T, dgw_dqwr)
-
-    dxf_dqwr = np.zeros([6, 4], dtype=np.float64)
-    dxf_dqwr[3, 0:4] = dtheta_dqwr.T
-    dxf_dqwr[4, 0:4] = dphi_dqwr.T
-    dxf_drw = np.zeros([6, 3], dtype=np.float64)
-    dxf_drw[0:3, 0:3] = np.identity(3, dtype=np.float64)
-    dxf_dxv = np.zeros([6, 13], dtype=np.float64)
-    dxf_dxv[0:6, 0:3] = dxf_drw
-    dxf_dxv[0:6, 4:8] = dxf_dqwr
-
-    dxfprima_dgw = np.zeros([5, 3], dtype=np.float64)
-    dxfprima_dgw[3, 0:3] = dtheta_dgw.T
-    dxfprima_dgw[4, 0:3] = dphi_dgw.T
-
-    dgw_dgc = mat_r
-    dgc_dhu = np.zeros([3, 2], dtype=np.float64)
-    dgc_dhu[0:2, 0:2] = np.diag([1 / camera['fku'], 1 / camera['fkv']])
-    dhu_dhd = mathematics.jacob_undistort_fm(xy, camera)
-
-    dyprima_dhd = np.dot(np.dot(np.dot(dxfprima_dgw, dgw_dgc), dgc_dhu), dhu_dhd)
-
-    dxf_dhd = np.zeros([6, 3], dtype=np.float64)
-    dxf_dhd[0:5, 0:2] = dyprima_dhd
-    dxf_dhd[5, 2] = 1
+    dxf_dxv = compute_dxf_dxv(h_w, h_c, x)
+    dxf_dhd = compute_dxf_dhd(h_w, mat_r, xy, camera)
 
     padd = np.zeros([3, 3], dtype=np.float64)
     padd[0:2, 0:2] = np.identity(2, dtype=np.float64) * camera['sd'] ** 2
@@ -208,5 +285,4 @@ def compute_new_feature(x, cov, xy, camera):
             np.dot(np.dot(dxf_dhd, padd), dxf_dhd.T))
 
     cov = mat_p2
-
     return x, cov, xf

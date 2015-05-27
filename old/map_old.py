@@ -48,73 +48,6 @@ class Map:
             x, cov = self.initialize_features(x, cov, inparams, frame, inparams, min_num_of_features - measured)
         return x, cov
 
-    def delete_features(self, x, cov):
-        """
-
-        :param x:
-        :param cov:
-        :return:
-        """
-        if len(self.features) == 0:
-            return x, cov
-        delete_move = 0
-        del_list = []
-        for i in range(len(self.features)):
-            if self.features[i]['times_predicted'] < 5:
-                continue
-            self.features[i]['begin'] -= delete_move
-            if self.features[i]['times_measured'] < 0.5 * self.features[i]['times_predicted']:
-                delete_move += self.features[i]['type'] * 2
-                x, cov = self.delete_feature(x, cov, i)
-                del_list.append(i)
-
-        for i in del_list:
-            self.features.pop(i)
-        return x, cov
-
-    def delete_feature(self, x, cov, f_id):
-        """
-
-        :param x:
-        :param cov:
-        :param f_id:
-        :return:
-        """
-        rows2delete = self.features[f_id]['type'] * 3
-        begin = self.features[f_id]['begin']
-        # IN P
-        cov2 = np.zeros([cov.shape[0] - rows2delete, cov.shape[1] - rows2delete])
-        cov2[0:begin, 0:begin] = cov[0:begin, 0:begin]
-        if cov2.shape[0] > begin + rows2delete:
-            cov2[0:begin, begin:] = cov[0:begin, begin + rows2delete:]
-            cov2[begin:, 0:begin] = cov[begin + rows2delete:, 0:begin]
-            cov2[begin:, begin:] = cov[begin + rows2delete:, begin + rows2delete:]
-        cov = cov2
-        # IN X
-        x2 = np.zeros(x.shape[0] - rows2delete)
-        x2[0:begin] = x[0:begin]
-        x2[begin:] = x[begin + rows2delete:]
-        x = x2
-        return x, cov
-
-    def update_features_info(self):
-        """
-
-        :return:
-        """
-        for i in range(len(self.features)):
-            if self.features[i]['h'] is not None:
-                self.features[i]['times_predicted'] += 1
-            if self.features[i]['low_innovation_inlier'] or self.features[i]['high_innovation_inlier']:
-                self.features[i]['times_measured'] += 1
-            self.features[i]['individually_compatible'] = 0
-            self.features[i]['low_innovation_inlier'] = 0
-            self.features[i]['high_innovation_inlier'] = 0
-            self.features[i]['h'] = None
-            self.features[i]['z'] = None
-            self.features[i]['H'] = None
-            self.features[i]['S'] = None
-        pass
 
     def inverse_depth2xyz(self, x, cov):
         """
@@ -165,29 +98,6 @@ class Map:
                     cov = np.dot(np.dot(mat_j_all, cov), mat_j_all.T)
                     convert = 1
 
-        return x, cov
-
-    def initialize_features(self, x, cov, inparams, frame, step, num_of_features):
-        """
-
-        :param x:
-        :param cov:
-        :param inparams:
-        :param frame:
-        :param step:
-        :param num_of_features:
-        :return:
-        """
-        max_attempts = 50
-        attempts = 0
-        initialized = 0
-
-        while (initialized < num_of_features) and (attempts < max_attempts):
-            size = x.shape[0]
-            attempts += 1
-            x, cov = self.initialize_feature(x, cov, inparams, frame, step)
-            if size < x.shape[0]:
-                initialized += 1
         return x, cov
 
 
